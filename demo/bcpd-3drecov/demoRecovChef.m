@@ -34,7 +34,6 @@ for j=2:ntarget
   y   =sprintf('%s/../../data/chef_view%.3d.txt',pwd,src(j));
   x   =sprintf('%s/../../data/chef_view%.3d.txt',pwd,j);
 
-  fns =sprintf('Result/output_s%.3d.txt',j);
   fnR =sprintf('Result/output_R%.3d.txt',j);
   fnt =sprintf('Result/output_t%.3d.txt',j);
 
@@ -45,7 +44,6 @@ for j=2:ntarget
   cmd =sprintf('%s -x%s -y%s %s %s %s -Tr -sT',bcpd,x,y,prm1,prm2,prm3);
   system(cmd); 
 
-  movefile('output_s.txt',fns);
   movefile('output_R.txt',fnR);
   movefile('output_t.txt',fnt);
 end
@@ -59,11 +57,10 @@ t=zeros(D,ntarget);
 
 %% load rigid transformations
 for j=2:ntarget
-  fns =sprintf('Result/output_s%.3d.txt',j);
   fnR =sprintf('Result/output_R%.3d.txt',j);
   fnt =sprintf('Result/output_t%.3d.txt',j);
 
-  s(j)     =load(fns);
+  s(j)     =1.0;
   R(:,:,j) =load(fnR);
   t(:,j)   =load(fnt);
 end
@@ -100,3 +97,4 @@ end
 writematrix(X,'Result/recovChef.txt',     'Delimiter','tab');
 writematrix(C,'Result/recovChefColor.txt','Delimiter','tab');
 vis1;
+
