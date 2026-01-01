@@ -23,8 +23,8 @@
 typedef struct pairwise_size  {int D; int Df; int M; int N; int K; int J;} pwsz;
 typedef struct pairwise_param {char fn[8][256]; char nrm; char nrf; int opt;
   int nlp; int G; double dlt; double omg; double gma; double fpv;
-  int llp; int J; double lim; double lmd; double bet;
-  int rns; int K; double btn; double kpa; double cnv;
+  int llp; int J; double lim; double lmd; double bet; double eta;
+  int rns; int K; double btn; double kpa; double cnv; double vep;
   int dwn[2]; double dwr[2]; int nnk; double nnr; double tau; double eps;
 } pwpm;
 
@@ -34,7 +34,7 @@ enum pairwise_option {
   PW_OPT_DBIAS = (1 << 2), PW_OPT_SAVET = (1 <<11), PW_OPT_VTIME = (1 <<20),
   PW_OPT_HISTO = (1 << 3), PW_OPT_SAVEA = (1 <<12), PW_OPT_NWARN = (1 <<21),
   PW_OPT_SAVE  = (1 << 4), PW_OPT_SAVEP = (1 <<13), PW_OPT_ISOVF = (1 <<22),
-  PW_OPT_SAVEX = (1 << 5),                          PW_OPT_AFFIN = (1 <<23),
+  PW_OPT_SAVEX = (1 << 5), PW_OPT_AUGKD = (1 <<14), PW_OPT_AFFIN = (1 <<23),
   PW_OPT_SAVEY = (1 << 6), PW_OPT_PATHX = (1 <<15), PW_OPT_NOSIM = (1 <<24),
                            PW_OPT_PATHY = (1 <<16), PW_OPT_NONRG = (1 <<25),
   PW_OPT_SAVEV = (1 << 8), PW_OPT_INFO  = (1 <<17), PW_OPT_NOSCL = (1 <<26),

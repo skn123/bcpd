@@ -20,7 +20,7 @@ fy=sprintf('%s/tr_reg_%.3d.wks.c%.2d.txt',DIRDATA,idy,ncol);
 tr=sprintf('%s/tr_reg.face.txt',          DIRDATA);
 
 IN =sprintf('-x%s -X%s -y%s -Y%s -Ggeo,.1,%s',vx,fx,vy,fy,tr);
-OPT='-ux -Ux -n200 -c1e-6 -h -A -e.4 -l100 -b1 -w0.1 -g1 -r1 -sY -DB,2000,.05 ';
+OPT='-ux -n200 -c1e-6 -h -A -e.4 -l100 -b1 -w0.1 -g1 -r1 -sY -DB,2000,.05 ';
 cmd=sprintf('%s %s %s',EXE,IN,OPT); system(cmd);
 
 x=load(vx);

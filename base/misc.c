@@ -39,6 +39,16 @@ double volume(const double *x, int D, int N){
   return V;
 }
 
+double lnvolume(const double *x, int D, int N){
+  int d,n; double max,min,val=0;
+  for(d=0;d<D;d++){
+    max=x[d];for(n=1;n<N;n++) max=fmax(max,x[d+D*n]);
+    min=x[d];for(n=1;n<N;n++) min=fmin(min,x[d+D*n]);
+    val+=log(max-min);
+  }
+  return val;
+}
+
 double det(const double *A, const int D){
   assert(D==2||D==3);
   return D==2? A[0]*A[3]-A[1]*A[2]:

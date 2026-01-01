@@ -42,7 +42,7 @@ double *geokdecomp(int *Knew, const double *Y, int D, int M, const int **E, cons
   works=calloc((2*M+1)*K,si); U =calloc(M,si); C=calloc(lwork,sd);
 
   /* geodesic kernel (partial) computation */
-  dummy=calloc(D*K,sd); assert(dummy); downsample(dummy,U,K,(double*)Y,D,M,-0.05); free(dummy);
+  downsample(U,K,(double*)Y,D,M,-0.05);
   #pragma omp parallel for
   for(j=0;j<K;j++) dijkstra(kerns+M*j,prevs+M*j,works+(2*M+1)*j,(const int**)E,(const double**)W,M,U[j]);
   for(j=0;j<K;j++)for(m=0;m<M;m++) kerns[m+M*j]=a*((kerns[m+M*j]<0)?0:gaussd(kerns[m+M*j],bet))+(1-a)*gaussd(dist(Y+D*m,Y+D*U[j],D),bet);

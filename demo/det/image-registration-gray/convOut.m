@@ -29,11 +29,7 @@ function convOut(level)
     end
   end
   
-  if exist('medfilt2', 'file') == 2
-    ft = medfilt2(ft, [5 5]);  % Use toolbox version
-  else
-    error('Image procesing toolbox is missing. Abort');
-  end
+  ft = medianfilter(ft, [5 5]);  % Use toolbox version
   
   imwrite(fx,'imx.jpg');
   imwrite(fy,'imy.jpg');

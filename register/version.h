@@ -1,2 +1,2 @@
-#define _VERSION_  "0.95.0"
-#define _DATE_     "2025/03/17"
+#define _VERSION_  "0.97"
+#define _DATE_     "2026/01/01"

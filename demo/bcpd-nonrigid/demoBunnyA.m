@@ -10,7 +10,7 @@ if(ispc) bcpd=fnw; else bcpd=fnm; end;
 omg ='0.1';
 bet ='2.0';
 lmd ='200';
-gma ='10';
+gma ='3';
 K   ='70';
 J   ='300';
 c   ='1e-6';

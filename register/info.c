@@ -137,8 +137,9 @@ static void yesno(void){
 }
 
 void printInfo(pwsz sz, pwpm pm){ int flag;
-  int nx,ny; double rx,ry; char stype[3][32]={"random sampling","inverse density","voxel grid"}; char model[64],algo[64];
-  nx=pm.dwn[TARGET]; rx=pm.dwr[TARGET];
+  char stype[4][32]={"random sampling","inverse density","voxel grid","grid variance"};
+  int nx,ny; double rx,ry,vep; char model[64],algo[64];
+  nx=pm.dwn[TARGET]; rx=pm.dwr[TARGET]; vep=pm.vep;
   ny=pm.dwn[SOURCE]; ry=pm.dwr[SOURCE];
 
   fprintf(stderr,"\n  BCPD/DET/DLD version %s (%s). OpenMP: %s.\n",_VERSION_,_DATE_,omp?"Turned on":"Not used");
@@ -193,6 +194,7 @@ void printInfo(pwsz sz, pwpm pm){ int flag;
   fprintf(stderr,"    gamma   =  %.2lf\n", pm.gma);
   if(pm.kpa<=ZERO) fprintf(stderr,"    kappa   =  inf\n");
   else             fprintf(stderr,"    kappa   =  %lf\n", pm.kpa);
+  if(pm.vep>=0)    fprintf(stderr,"    eta     =  %.2lf\n",pm.eta);
 
   if(strlen(pm.fn[COV_LQ]))      strcpy(algo,"DLD");
   else if(strlen(pm.fn[FUNC_Y])) strcpy(algo,"DET");
@@ -240,14 +242,26 @@ void printInfo(pwsz sz, pwpm pm){ int flag;
   fprintf(stderr,"  Acceleration: \n");
   if(nx||ny) fprintf(stderr,"    Downsampling:\n");
   if(nx){    fprintf(stderr,"      Target --> %5.d ",nx);
-    if     (rx>0) fprintf(stderr,"[%s: r=%.3f]\n",stype[1], rx);
-    else if(rx<0) fprintf(stderr,"[%s: r=%.3f]\n",stype[2],-rx);
-    else          fprintf(stderr,"[%s]\n",stype[0]);
+    if(vep<0){
+      if     (rx>0) fprintf(stderr,"[%s: r=%.3f]\n",stype[1], rx);
+      else if(rx<0) fprintf(stderr,"[%s: r=%.3f]\n",stype[2],-rx);
+      else          fprintf(stderr,"[%s]\n",stype[0]);
+    }
+    else{
+      if     (rx>0) fprintf(stderr,"[%s (sum): r=%.3f, eps=%.3lf]\n",stype[3], rx,vep);
+      else          fprintf(stderr,"[%s (max): r=%.3f, eps=%.3lf]\n",stype[3],-rx,vep);
+    }
   }
   if(ny){    fprintf(stderr,"      Source --> %5.d ",ny);
-    if     (ry>0) fprintf(stderr,"[%s: r=%.3f]\n",stype[1], ry);
-    else if(ry<0) fprintf(stderr,"[%s: r=%.3f]\n",stype[2],-ry);
-    else          fprintf(stderr,"[%s]\n",stype[0]);
+    if(vep<0){
+      if     (ry>0) fprintf(stderr,"[%s: r=%.3f]\n",stype[1], ry);
+      else if(ry<0) fprintf(stderr,"[%s: r=%.3f]\n",stype[2],-ry);
+      else          fprintf(stderr,"[%s]\n",stype[0]);
+    }
+    else{
+      if     (ry>0) fprintf(stderr,"[%s (sum): r=%.3f, eps=%.3lf]\n",stype[3], ry,vep);
+      else          fprintf(stderr,"[%s (max): r=%.3f, eps=%.3lf]\n",stype[3],-ry,vep);
+    }
   }
   if(!(pm.opt&PW_OPT_NONRG)){
     if(sz.K)   fprintf(stderr,"    Fast G:  K = %d\n",sz.K);

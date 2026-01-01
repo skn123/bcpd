@@ -207,6 +207,7 @@ t is a translation vector, and v is a pointwise displacement.
 - `-b [real]`: Beta. Positive. It controls the range where deformation vectors are smoothed.
 - `-g [real]`: Gamma. Positive. It controls how much the initial alignment are ignored.
 - `-k [real]`: Kappa. Positive. It controls the randomness of mixing coefficients.
+- `-j [real]`: Eta (DET only). Positive. It controls the balance between spatial and functional likelihoods.
 
 The expected length of deformation vectors is sqrt(D/lambda). Set gamma around 2 to 10 if your target point set
 is largely rotated. If input shapes are roughly registered, use `-g0.1` with the option `-ux`.
@@ -235,7 +236,7 @@ which controls the range where deformation vectors are smoothed.
   - 3rd argument: The file that defines a triangle mesh.
 
 - `-G [string,real,int,real]`: Geodesic kernel without an input mesh. E.g., `-G geodesic,0.2,8,0.15`.
-  - 1st argument: The string `geodesic` only, i.e., the tag representing the geodesic kernel.
+  - 1st argument: The string `geodesic` or `geodesic+`, i.e., the tag representing the geodesic kernel.
   - 2nd argument: Tau. The rate controlling the balance between geodesic and Gaussian kernels.
   - 3rd argument: The number of neighbors for each node, required for k-NN graph construction.
   - 4th argument: The radius that defines neighbors for each node, required for k-NN graph construction.
@@ -244,7 +245,8 @@ The geodesic kernel usually outperforms standard kernels when different parts of
 If the mesh of a source shape is available, choose the first option; it typically works better than the second option.
 Otherwise, choose the second option; BCPD automatically creates the graph required for geodesic computations.
 The mesh file must be a tab-separated file that contains three integers for each line; a triangle is defined
-as a triplet of vertices. The following parameters tune the geodesic kernel:
+as a triplet of vertices. The tag 'geodesic+' is used only for DET, incorporating functional signals to build the graph.
+The following parameters tune the geodesic kernel:
 
 - `-b [real]`: Beta. Positive. Gaussian function's width.
 - `-K [int]`:  K. Positive. Rank constraint on G.
@@ -295,11 +297,13 @@ Retry the execution with `-p -f0.3` unless the Nystrom method is replaced by the
   - 1st argument: One of the symbols: [X,Y,B,x,y,b]; x: target; y: source; b: both, upper: voxel, lower: ball.
   - 2nd argument: The number of points to be extracted by the downsampling.
   - 3rd argument: The voxel size or ball radius required for downsampling.
+  - [DET only] 4th argument (real): The constant ensuring non-zero density in homogeneous regions.
 
 Input point sets can be downsampled by the following algorithms:
-1. voxel-grid resampling with voxel width r,
-2. ball resampling with the radius r, and
+1. voxel-grid resampling with voxel width r (upper case: X,Y,B)
+2. ball resampling with the radius r (lower case: x,y,b), and
 3. random resampling with equivalent sampling probabilities.
+4. [DET only] variance-guided importance sampling emphasizing boudaries.
 
 The parameter r can be specified as the 3rd argument of `-D`. If r is specified as 0,
 sampling scheme (3) is selected. The numbers of points in downsampled target and source point sets

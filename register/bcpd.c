@@ -26,6 +26,7 @@
 #include<string.h>
 #include<sys/time.h>
 #include"../base/misc.h"
+#include"../base/stat.h"
 #include"../base/lapack.h"
 #include"../base/kdtree.h"
 #include"../base/kernel.h"
@@ -45,12 +46,18 @@ char   spinner[16][16]={
   "    -\0", "   - \0",   "  -  \0", " -   \0",
 };
 
-static void print_status(int lp, double Np, double sigma, double diff, double conv, int opt, int J, int local){
+static void print_status(int lp, double Np, double sigma, double *pi, double diff, double conv, int opt, int J, int local){
   char *acc=(local&&(opt&PW_OPT_LOCAL))?"KDtree ":(J?"Nystrom":"None   ");
   if(opt&PW_OPT_QUIET) return;
   if(opt&PW_OPT_HISTO){
-    if(lp) fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  sigma=%lf  diff=%lf\n",lp+1,acc,Np,sigma,diff);
-    else   fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  sigma=%lf          \n",lp+1,acc,Np,sigma);
+    if(pi){
+      if(lp) fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  pi=%lf  sigma=%lf  diff=%lf\n",lp+1,acc,Np,*pi,sigma,diff);
+      else   fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  pi=%lf  sigma=%lf          \n",lp+1,acc,Np,*pi,sigma);
+    }
+    else {
+      if(lp) fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  sigma=%lf  diff=%lf\n",lp+1,acc,Np,sigma,diff);
+      else   fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  sigma=%lf          \n",lp+1,acc,Np,sigma);
+    }
   }
   else {
     if(lp) fprintf(stderr,"\033[8A");
@@ -159,20 +166,20 @@ int bcpd(
   const double  *   Y,    /*  I  | DM x 1        | source point set         */
   const double  *   fx,   /*  I  |  N x 1        | function value of x      */
   const double  *   fy,   /*  I  |  M x 1        | function value of y      */
-  const double  *   LQ,   /*  I  | K + M x K     | only for geodesic kernel */
+  const double  *   LQ,   /*  I  | K + M x K     | geodesic/ssm only        */
   const pwsz        sz,   /*  I  |               | D, Df, M, N, K, J,       */
   const pwpm        pm    /*  I  |               | tuning parameters        */
   ){
 
-  double c,cc,val,val1,val2,c1,c2; double vol,diff,rold=1e100,reg=1e-20,dlt,lim; int flg,local; int mtd;
-  double *B/*KD*/,*E/*MD*/,*Q/*MK*/,*L/*K*/,*G/*MM*/,*G1/*MM*/,*G2/*MM*/;
+  double cc,val,val1,val2,c1,c2; double vol,diff,rold=1e100,reg=1e-20,dlt,lim; int flg,local; int mtd;
+  double *pout,*c/*N*/,*mx,*vx/*D*/,*mf,*vf,*hf/*Df*/,*B/*KD*/,*E/*MD*/,*Q/*MK*/,*L/*K*/,*G/*MM*/,*G1/*MM*/,*G2/*MM*/;
   double *b/*M*/,*q/*N*/,*f/*N*/,*PX/*DM*/,*sx/*D*M*nlp*/,*sy/*D*M*nlp*/,*ix/*DM*/,*lw/*DD*/;
   double *xb/*D*/,*ub/*D*/,*phi/*DD*/,*psi/*DD*/,*Sxu/*DD*/,*dS/*D*/,*wk/*10D*/; struct timeval tick;
   double *wld,*wdd/*K(K+11)*/,*wgd/*M+N+J+JJ*/; int *Tx,*Ty/*1+3N*/,*wdi/*M*/,*wgi/*M+N*/; double bet;
   int d,i,j,m,n,lp,D,Df,K,M,N,J; int *ipiv,info,lwork1; char jobz='V',uplo='U'; double tr=0; int max;
   double omg,lmd,kpa,cnv; int nlp,opt; int sd=0,si=0; int T=pm.opt&PW_OPT_LOCAL,db=pm.opt&PW_OPT_DBIAS;
   double clc,cps=CLOCKS_PER_SEC,*treal=pf,*tcpu=pf+pm.nlp,*rprog=pf+2*pm.nlp; int pflog=pm.opt&PW_OPT_PFLOG;
-  double *Pfx; int ssm=strlen(pm.fn[COV_LQ]); int type=(pm.opt&PW_OPT_AFFIN)?'a':'s';
+  double *Pfx; int ssm=strlen(pm.fn[COV_LQ]); int type=(pm.opt&PW_OPT_AFFIN)?'a':'s'; double det,zeta,eb;
 
   /* record base time */
   if(pflog){ gettimeofday(&tick,NULL); clc=(double)clock()/cps;
@@ -182,17 +189,19 @@ int bcpd(
   /* alias: parameter & size */
   omg=pm.omg; kpa=pm.kpa; cnv=pm.cnv; D=sz.D; K=sz.K; mtd=MAXTREEDEPTH;
   lmd=pm.lmd; dlt=pm.dlt; nlp=pm.nlp; M=sz.M; J=sz.J; lwork1=10*D;
-  bet=pm.bet; lim=pm.lim; opt=pm.opt; N=sz.N; max=M+N;/*max=M>N?M:N*/; Df=sz.Df;
+  bet=pm.bet; lim=pm.lim; opt=pm.opt; N=sz.N; max=M+N; Df=sz.Df; zeta=Df?pm.eta*(D/(double)Df):0;
   /*---------------------------------------------------------------o
   |   alias: memory                                                |
   o---------------------------------------------------------------*/
   /* common: double-> 4M+2N+D(5M+N+13D+3), int->D                 */
   b=wd+sd; sd+=M; lw=wd+sd; sd+=D*D; phi=wd+sd; sd+=D*D; dS=wd+sd; sd+=D;
-  /*-----------*/ PX=wd+sd; sd+=M*D; psi=wd+sd; sd+=D*D; xb=wd+sd; sd+=D;
+  c=wd+sd; sd+=N; PX=wd+sd; sd+=M*D; psi=wd+sd; sd+=D*D; xb=wd+sd; sd+=D;
   f=wd+sd; sd+=N; /*--------------*/ Sxu=wd+sd; sd+=D*D; ub=wd+sd; sd+=D;
   q=wd+sd; sd+=N; E =wd+sd; sd+=D*M; ix =wd+sd; sd+=D*M; wk=wd+sd; sd+=lwork1;
-  ipiv=wi+si; si+=D; Pfx=Df?wd+sd:NULL; sd+=Df?Df*M:0;
-
+  ipiv=wi+si; si+=D; Pfx=Df?wd+sd:NULL; sd+=Df?Df*M:0; pout=wd+sd; sd+=N;
+  /* common: function registration */
+  mx=wd+sd; sd+=D; mf=Df?wd+sd:NULL; sd+=Df; hf=Df?wd+sd:NULL; sd+=Df;
+  vx=wd+sd; sd+=D; vf=Df?wd+sd:NULL; sd+=Df;
   if(pm.opt&PW_OPT_NONRG){G=G1=G2=NULL; goto skip_G_alloc;}
   /* rank restriction: double-> K x (2M+3K+D+12), int->M */
   /*------------------------*/ G  =K?NULL:wd+sd; sd+=K?0:M*M;
@@ -253,8 +262,15 @@ int bcpd(
     for(d=0;d<Df;d++) val+=SQ(e[d]);
     for(d=0;d<Df;d++) e[d]=sqrt(val/Df);
   }
-  /* volume */
-  vol=volume(X,D,N)*(Df?volume(fx,Df,N):1.0f);
+  /* pout: adaptive outlier probability */
+  if(Df>10){ /* gaussian */
+    mvmean(mx,X,D,N); mvmean(mf,fx,Df,N);
+    mvsdev(vx,X,D,N); mvsdev(vf,fx,Df,N);
+    for(n=0;n<N;n++) pout[n]=exp(lnnormd(X+D*n,mx,vx,D)+zeta*lnnormd(fx+Df*n,mf,vf,Df));
+  } else   { /* uniform  */
+    vol=exp(lnvolume(X,D,N)+(Df?zeta*lnvolume(fx,Df,N):0));
+    for(n=0;n<N;n++) pout[n]=1/vol;
+  }
   /* tree */
   if(T) kdtree(Tx,wgi,wgd,X,D,N);
   /* G */
@@ -276,13 +292,14 @@ int bcpd(
     |   update: x, w                                                 |
     o---------------------------------------------------------------*/
     local=(*r<pm.btn); flg=(local&&(opt&PW_OPT_LOCAL))?GRAM_FLAG_LOCAL:0;
-    c=(pow(2.0*M_PI*SQ(*r),0.5*D)*omg)/(vol*(1-omg)); /* c */
-    if(Df) c*=pow(2.0*M_PI,0.5*Df)*product(e,Df);
+    det=exp(lnidet(*r,D)+(Df?zeta*lnddet(e,Df):0));
+    for(n=0;n<N;n++) c[n]=pout[n]*(omg/(1-omg))/det;
+    for(d=0;d<Df;d++) hf[d]=e[d]/sqrt(zeta);
     for(m=0;m<M;m++) b[m]=a[m]*exp(-(D/2)*sgm[m]*SQ((*s)/(*r)));
-    gaussprod(q,NULL,NULL,wgd,wgi,y,X,fy,fx,b,Ty,D,Df,M,N,J,*r,e,dlt,lim,flg|GRAM_FLAG_TRANS|GRAM_FLAG_BUILD);/* Kt1 */
-    for(n=0;n<N;n++) q[n]=1.0/(q[n]+c); /* q */
-    for(n=0;n<N;n++) f[n]=1.0-(q[n]*c); /* f */
-    gaussprod(w,PX,Pfx,wgd,wgi,y,X,fy,fx,q,Tx,D,Df,M,N,J,*r,e,dlt,lim,flg);
+    gaussprod(q,NULL,NULL,wgd,wgi,y,X,fy,fx,b,Ty,D,Df,M,N,J,*r,hf,dlt,lim,flg|GRAM_FLAG_TRANS|GRAM_FLAG_BUILD);/* Kt1 */
+    for(n=0;n<N;n++) q[n]=1.0/(q[n]+c[n]); /* q */
+    for(n=0;n<N;n++) f[n]=1.0-(q[n]*c[n]); /* f */
+    gaussprod(w,PX,Pfx,wgd,wgi,y,X,fy,fx,q,Tx,D,Df,M,N,J,*r,hf,dlt,lim,flg);
     for(m=0;m<M;m++){w[m]*=b[m];w[m]=w[m]<reg?reg:w[m];}
     for(d=0;d<D;d++)for(m=0;m<M;m++) PX[m+M*d]*=b[m];
     if(Df) for(d=0;d<Df;d++)for(m=0;m<M;m++) Pfx[m+M*d]*=b[m];
@@ -363,7 +380,6 @@ int bcpd(
     if(*Np<0){goto err05;}
     *r/=(*Np)*D; *r=fabs(*r); *r=sqrt(*r);
     diff=fabs(rold-*r);
-    print_status(lp,*Np,*r,diff,cnv,opt,J,local);
     if(lp>pm.llp&&(*r<cnv||diff<cnv)){
       if(kpa>ZERO)for(m=0;m<M;m++) a[m]=(kpa+w[m])/(kpa*M+(*Np));
       break;
@@ -374,11 +390,11 @@ int bcpd(
       for(m=0;m<M;m++) e[d]+=SQ(fy[d+Df*m])*w[m];
       for(m=0;m<M;m++) e[d]-=2*Pfx[m+M*d]*fy[d+Df*m];
       e[d]/=(*Np); e[d]=fabs(e[d]); e[d]=sqrt(e[d]); e[d]+=pm.fpv;
-    }
-    if(pm.opt&PW_OPT_ISOVF){val=0;
-      for(d=0;d<Df;d++) val+=SQ(e[d]);
-      for(d=0;d<Df;d++) e[d]=sqrt(val/Df);
-    }
+    } val=0;
+    for(d=0;d<Df;d++){val+=SQ(e[d]);} eb=sqrt(val/Df);
+    if(pm.opt&PW_OPT_ISOVF)for(d=0;d<Df;d++) e[d]=eb;
+
+    print_status(lp,*Np,*r,Df?(&eb):NULL,diff,cnv,opt,J,local);
     /* save comp. profile */
     if(pflog&&lp+1<nlp){gettimeofday(&tick,NULL);treal[lp+1]+=tick.tv_sec+tick.tv_usec/1e6;tcpu[lp+1]+=clock()/cps;rprog[lp+1]=*r;}
   }

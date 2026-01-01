@@ -82,7 +82,7 @@ void save_corresp(
   strcpy(fnc,prefix);strcat(fnc,"c.txt");if(pm.opt&PW_OPT_SAVEC){fpc=fopen(fnc,"w");fprintf(fpc,"[n]\t[1/0]\n");}
 
   T=calloc(3*M+1,si); bi=calloc(6*M,si); bd=calloc(2*M,sd); p=calloc(M,sd); l=calloc(M,si); 
-  kdtree(T,bi,bd,y,D,M); vol=volume(X,D,N); c=(pow(2.0*M_PI*SQ(r),0.5*D)*omg)/(vol*(1-omg));
+  kdtree(T,bi,bd,y,D,M); vol=volume(X,D,N); c=(pow(2.0*M_PI*SQ(r),0.5*D)*omg)/(vol*(1-omg)); /* CAUTION: To be fixed */
   for(n=0;n<N;n++){
     /* compute P, c, e */
     val=c;top=ct=0;do{eballsearch_next(&m,S,&top,X+D*n,rad,y,T,D,M);if(m>=0)l[ct++]=m;}while(top);
@@ -96,8 +96,8 @@ void save_corresp(
     if(fpc){fprintf(fpc,"%d\t%d\n",n+1,mmax?1:0);}
   }
   if(fpP){fclose(fpP);} free(l); free(bd);
-  if(fpe){fclose(fpc);} free(p); free(bi);
-  if(fpc){fclose(fpe);} free(T);
+  if(fpc){fclose(fpc);} free(p); free(bi);
+  if(fpe){fclose(fpe);} free(T);
   return;
 }
 
@@ -130,17 +130,20 @@ void scan_kernel(pwpm *pm, const char *arg){ char *p;
   if(strstr(arg,"txt")) sscanf(p+1,"%lf,%s",    &(pm->tau),pm->fn[FACE_Y]);
   else                  sscanf(p+1,"%lf,%d,%lf",&(pm->tau),&(pm->nnk),&(pm->nnr));
   if(pm->tau<0||pm->tau>1){printf("ERROR: the 2nd argument of -G (tau) must be in range [0,1]. Abort.\n"); exit(EXIT_FAILURE);}
+  if(strstr(arg,"+")&&pm->nnk) pm->opt|=PW_OPT_AUGKD;
 }
 
-void scan_dwpm(int *dwn, double *dwr, const char *arg){
-  char c; int n,m; double r;
-  m=sscanf(arg,"%c,%d,%lf",&c,&n,&r);
-  if(m!=3) goto err01;
+void scan_dwpm(int *dwn, double *dwr, double *vep, const char *arg){
+  char c; int n,m; double r; int vgis; *vep=-1.0;
+
+  m=sscanf(arg,"%c,%d,%lf,%lf",&c,&n,&r,vep);
+
+  if(m!=3&&m!=4) goto err01;
   if(n<=0) goto err03;
   if(r< 0) goto err04;
   if(isupper(c)){r*=-1.0f;} c=tolower(c);
   if(c!='x'&&c!='y'&&c!='b') goto err02;
-  if(r<0&&-r<1e-2) r=-1e-2;
+  if(vep<0&&r<0&&-r<1e-2) r=-1e-2;
   switch(c){
     case 'x': dwn[TARGET]=n; dwr[TARGET]=r; break;
     case 'y': dwn[SOURCE]=n; dwr[SOURCE]=r; break;
@@ -185,16 +188,17 @@ void pw_getopt(pwpm *pm, int argc, char **argv){ int opt;
   strcpy(pm->fn[TARGET],"X.txt");   pm->omg=0.0; pm->cnv=1e-4; pm->K=0; pm->opt=0.0; pm->btn=0.20; pm->bet=2.0;
   strcpy(pm->fn[SOURCE],"Y.txt");   pm->lmd=2.0; pm->nlp= 500; pm->J=0; pm->dlt=7.0; pm->lim=0.15; pm->eps=1e-3;
   strcpy(pm->fn[OUTPUT],"output_"); pm->rns=0;   pm->llp=  30; pm->G=0; pm->gma=1.0; pm->kpa=ZERO; pm->nrm='e';
-  strcpy(pm->fn[FACE_Y],"");        pm->nnk=0;   pm->nnr=   0;          pm->fpv=0.1; pm->nrf='e';
-  strcpy(pm->fn[FUNC_Y],"");
+  strcpy(pm->fn[FACE_Y],"");        pm->nnk=0;   pm->nnr=   0;          pm->fpv=0.1; pm->nrf='e';  pm->eta=1.0;
+  strcpy(pm->fn[FUNC_Y],"");        pm->vep=0.1;
   strcpy(pm->fn[FUNC_X],"");
   strcpy(pm->fn[COV_LQ],"");
   pm->dwn[SOURCE]=0; pm->dwr[SOURCE]=0.0f;
   pm->dwn[TARGET]=0; pm->dwr[TARGET]=0.0f;
-  while((opt=getopt(argc,argv,"U:T:t:X:Y:C:D:z:u:r:w:l:b:k:g:d:e:c:n:N:G:J:K:o:x:y:f:s:hipqvaAW"))!=-1){
+  while((opt=getopt(argc,argv,"j:U:T:t:X:Y:C:D:z:u:r:w:l:b:k:g:d:e:c:n:N:G:J:K:o:x:y:f:s:hipqvaAW"))!=-1){
     switch(opt){
-      case 'D': scan_dwpm( pm->dwn, pm->dwr,optarg);  break;
+      case 'D': scan_dwpm(pm->dwn,pm->dwr,&(pm->vep),optarg); break;
       case 'G': scan_kernel(pm, optarg);              break;
+      case 'j': pm->eta  = atof(optarg);              break;
       case 't': pm->fpv  = atof(optarg);              break;
       case 'z': pm->eps  = atof(optarg);              break;
       case 'b': pm->bet  = atof(optarg);              break;
@@ -255,7 +259,7 @@ void pw_getopt(pwpm *pm, int argc, char **argv){ int opt;
   /* disable 'for each' normalization if rigid */
   if((pm->opt&PW_OPT_NONRG)&&(pm->opt&PW_OPT_NOSCL)) if(pm->nrm=='e') pm->nrm='y';
   /* acceleration with default parameters */
-  if(pm->opt&PW_OPT_ACCEL) {pm->J=300;pm->K=70;pm->opt|=PW_OPT_LOCAL;}
+  if(pm->opt&PW_OPT_ACCEL) {pm->J=300;pm->K=100;pm->opt|=PW_OPT_LOCAL;}
   /* case: save all */
   if(pm->opt&PW_OPT_SAVE)
     pm->opt|=PW_OPT_SAVEX|PW_OPT_SAVEC|PW_OPT_SAVEP|PW_OPT_SAVEA|PW_OPT_PFLOG|
@@ -274,8 +278,9 @@ void memsize(int *dsz, int *isz, pwsz sz, pwpm pm){
   int M=sz.M,N=sz.N,J=sz.J,K=sz.K,D=sz.D,Df=sz.Df,Dc=D+Df;
   int T=pm.opt&PW_OPT_LOCAL; int L=M+N,mtd=MAXTREEDEPTH;
 
-  *isz =D;                *dsz =4*M+2*N+D*(5*M+N+14*D+3)+M*Df;    /* common            */
+  *isz =D;                *dsz =4*M+3*N+D*(5*M+N+14*D+3)+M*Df;    /* common            */
   *isz+=J?L:0;            *dsz+=J?J*(1+2*Dc+J):0;                 /* nystrom           */
+                          *dsz+=3*(D+Df);                         /* outlier           */
 
   if(pm.opt&PW_OPT_NONRG) goto skip;
   *isz+=K?M:0;            *dsz+=K?K*(2*M+3*K+D+12):(3*M*M);       /* G: low/full rank  */
@@ -290,22 +295,24 @@ void memsize(int *dsz, int *isz, pwsz sz, pwpm pm){
   *isz+=L*6;              *dsz+=2*L;                              /* work build        */
   *isz+=L*(2+mtd);                                                /* work eball/bbnext */
 
-  /* normalized gauss prod */
-  *dsz+=L*3*Dc;
-
 }
 
+#define LIMIT 3
+
 void print_bbox(const double *X, int D, int N){
-  int d,n; double max,min; char ch[3]={'x','y','z'};
-  for(d=0;d<D;d++){
+  int d,n; double max,min; char ch[3]={'x','y','z'}; int dmin=D>LIMIT?LIMIT:D;
+  for(d=0;d<dmin;d++){
     max=X[d];for(n=1;n<N;n++) max=fmax(max,X[d+D*n]);
     min=X[d];for(n=1;n<N;n++) min=fmin(min,X[d+D*n]);
-    fprintf(stderr,"%c=[%.2f,%.2f]%s",ch[d],min,max,d==D-1?"\n":", ");
+    fprintf(stderr,"%c=[%.2f,%.2f]%s",ch[d],min,max,d==dmin-1?"\n":", ");
   }
 }
 
-void print_norm(const double *X, const double *Y, int D, int N, int M, int sw, char type){
-    int t=0; char name[4][64]={"for each","using X","using Y","skipped"};
+void print_norm(const double *X, const double *Y, int D, int N, int M, int sw, char type, int func){
+    int t=0;
+    char name[4][64]={"for each","using X","using Y","skipped"};
+    char str1[3][64]={"","Domain ","Codomain "};
+    char str2[3][64]={"point sets","domain points","function values"};
     switch(type){
       case 'e': t=0; break;
       case 'x': t=1; break;
@@ -313,12 +320,14 @@ void print_norm(const double *X, const double *Y, int D, int N, int M, int sw, c
       case 'n': t=3; break;
     }
     if(sw){
-      fprintf(stderr,"  Normalization: [%s]\n",name[t]);
-      fprintf(stderr,"    Bounding boxes that cover point sets:\n");
+      fprintf(stderr,"  %sNormalization: [%s]\n",str1[func],name[t]);
+      fprintf(stderr,"    Bounding boxes that cover %s:\n",str2[func]);
     }
     fprintf(stderr,"    %s:\n",sw?"Before":"After");
     fprintf(stderr,"      Target: "); print_bbox(X,D,N);
     fprintf(stderr,"      Source: "); print_bbox(Y,D,M);
+    if(D>LIMIT)
+      fprintf(stderr,"      * Omitted feature ID > %d.\n",LIMIT);
     if(!sw) fprintf(stderr,"\n");
 }
 
@@ -352,13 +361,17 @@ void fprint_comptime2(FILE *fp, const struct timeval *tv, double *tt, int geok){
   fprintf(fp,"%lf\t%lf\n",tvcalc(tv+1,tv+0),tvcalc(tv+6,tv+5));
 }
 
-double* downsample_F (const double *F, int D, int L, const int *U, int num){
-  int d,j; double *f=calloc(D*num,sizeof(double));
-  for(j=0;j<num;j++)for(d=0;d<D;d++)f[d+D*j]=F[d+D*U[j]];
-  return f;
+double* getcols(const double *A, int D, int N, const int *index, int num){
+  int d,i,j; double *a=calloc(D*num,sizeof(double));
+  char err[64]="ERROR: Index out of bounds in 'getcols'. Abort.\n";
+  for(j=0;j<num;j++){i=index[j];
+    if(i<0||i>=N){fprintf(stderr,"%s",err);exit(EXIT_FAILURE);};
+    for(d=0;d<D;d++)a[d+D*j]=A[d+D*i];
+  }
+  return a;
 }
 
-double* downsample_LQ(const double *LQ, int M, int K, const int *U, int num, int D){
+double* LQ_getrows(const double *LQ, int M, int K, const int *U, int num, int D){
   int d,k,i; double *lq=NULL;
   if(!D)/*bcpd*/D=1;
   lq=calloc(K+D*num*K,sizeof(double));
@@ -377,6 +390,15 @@ double *read_LQ(int *nr, int *nc, const char* file){
 
   free(A); *nr=I;*nc=J;
   return(B);
+}
+
+double *matrix_join(const double *X, int Dx, const double *Y, int Dy, int N, double w){
+  int d,n,D=Dx+Dy; double *Z=malloc(D*N*sizeof(double));
+  for(n=0;n<N;n++){
+    for(d=0;d<Dx;d++) Z[d   +D*n]=X[d+Dx*n];
+    for(d=0;d<Dy;d++) Z[d+Dx+D*n]=Y[d+Dy*n]*w;
+  }
+  return Z;
 }
 
 int main(int argc, char **argv){
@@ -420,15 +442,17 @@ int main(int argc, char **argv){
 
   /* normalization */
   muX=calloc(D,sd); muY=calloc(D,sd);
-  if(!(pm.opt&PW_OPT_QUIET)&&(D==2||D==3)) print_norm(X,Y,D,N,M,1,pm.nrm);
+  if(!(pm.opt&PW_OPT_QUIET)&&(D>=1||D<=3)) print_norm(X,Y,D,N,M,1,pm.nrm,fx?1:0);
   normalizer(muX,&sgmX,muY,&sgmY,X,Y,N,M,D,pm.nrm);
   normalize (X,muX,sgmX,N,D);
   normalize (Y,muY,sgmY,M,D);
-  if(!(pm.opt&PW_OPT_QUIET)&&(D==2||D==3)) print_norm(X,Y,D,N,M,0,pm.nrm);
+  if(!(pm.opt&PW_OPT_QUIET)&&(D>=1||D<=3)) print_norm(X,Y,D,N,M,0,pm.nrm,fx?1:0);
   if(fx&&fy){ mufx=calloc(Df,sd); mufy=calloc(Df,sd);
+    if(!(pm.opt&PW_OPT_QUIET)&&(Df>=1||Df<=3)) print_norm(fx,fy,Df,N,M,1,pm.nrf,2);
     normalizer(mufx,&sgmfx,mufy,&sgmfy,fx,fy,N,M,Df,pm.nrf);
     normalize (fx,mufx,sgmfx,N,Df);
     normalize (fy,mufy,sgmfy,M,Df);
+    if(!(pm.opt&PW_OPT_QUIET)&&(Df>=1||Df==3)) print_norm(fx,fy,Df,N,M,0,pm.nrf,2);
   }
 
   /* geodesic kernel computation */
@@ -436,12 +460,14 @@ int main(int argc, char **argv){
   if(pm.opt&PW_OPT_NONRG) goto skip_geok;
   geok=(pm.nnk||strlen(pm.fn[FACE_Y]))&&pm.tau>1e-5;
   if(geok&&!(pm.opt&PW_OPT_QUIET)) fprintf(stderr,"  Executing the FPSA algorithm ... ");
-  if(geok){ sgraph* sg;
-    if(pm.nnk) sg=sgraph_from_points(Y,D,M,pm.nnk,pm.nnr);
-    else       sg=sgraph_from_mesh  (Y,D,M,pm.fn[FACE_Y]);
+  if(geok){ sgraph* sg; double *Z; int aug=pm.opt&PW_OPT_AUGKD;
+    Z=aug?matrix_join(Y,D,fy,Df,N,pm.eta):NULL;
+    if(aug)         sg=sgraph_from_points(Z,D+Df,M,pm.nnk,pm.nnr);
+    else if(pm.nnk) sg=sgraph_from_points(Y,D,   M,pm.nnk,pm.nnr);
+    else            sg=sgraph_from_mesh  (Y,D,   M,pm.fn[FACE_Y]);
     LQ=geokdecomp(&K,Y,D,M,(const int**)sg->E,(const double**)sg->W,pm.K,pm.bet,pm.tau,pm.eps);
     sz.K=pm.K=K; /* update K */
-    sgraph_free(sg);
+    sgraph_free(sg); if(aug){free(Z);}
     if(geok&&!(pm.opt&PW_OPT_QUIET)) fprintf(stderr,"done. (K->%d)\n\n",K);
   }
   skip_geok:
@@ -451,12 +477,16 @@ int main(int argc, char **argv){
   nx=pm.dwn[TARGET]; rx=pm.dwr[TARGET];
   ny=pm.dwn[SOURCE]; ry=pm.dwr[SOURCE];
   if((nx||ny)&&!(pm.opt&PW_OPT_QUIET)) fprintf(stderr,"  Downsampling ...");
-  if(nx){X0=X;N0=N;N=sz.N=nx;X=calloc(D*N,sd);Ux=calloc(rx==0?N0:N,si);downsample(X,Ux,N,X0,D,N0,rx);}
-  if(ny){Y0=Y;M0=M;M=sz.M=ny;Y=calloc(D*M,sd);Uy=calloc(ry==0?M0:M,si);downsample(Y,Uy,M,Y0,D,M0,ry);}
-  if(nx&&fx){fx0=fx;fx=downsample_F (fx0,Df,N0,Ux,N);}
-  if(ny&&fy){fy0=fy;fy=downsample_F (fy0,Df,M0,Uy,M);}
-  if(ny&&LQ){LQ0=LQ;LQ=downsample_LQ(LQ0,M0,K, Uy,M,ssm?D:0);}
+  if(nx){X0=X;N0=N;N=sz.N=nx;Ux=calloc(rx==0?N0:N,si);}
+  if(ny){Y0=Y;M0=M;M=sz.M=ny;Uy=calloc(ry==0?M0:M,si);}
+  if(nx){if(pm.vep<0) downsample(Ux,N,X0,D,N0,rx); else vgisample(Ux,N,X0,D,fx,Df,N0,rx,pm.vep);}
+  if(ny){if(pm.vep<0) downsample(Uy,M,Y0,D,M0,ry); else vgisample(Uy,M,Y0,D,fy,Df,M0,ry,pm.vep);}
+  if(nx){X=getcols(X0,D,N0,Ux,N);if(fx){fx0=fx;fx=getcols(fx0,Df,N0,Ux,N);}}
+  if(ny){Y=getcols(Y0,D,M0,Uy,M);if(fy){fy0=fy;fy=getcols(fy0,Df,M0,Uy,M);}}
+  if(ny&&LQ){LQ0=LQ;LQ=LQ_getrows(LQ0,M0,K,Uy,M,ssm?D:0);}
   if((nx||ny)&&!(pm.opt&PW_OPT_QUIET)) fprintf(stderr," done. \n\n");
+  if(pm.vep>=0) save_variable(pm.fn[OUTPUT],"vgis-x.txt",X,D,N,"%.6lf",TRANSPOSE);
+  if(pm.vep>=0) save_variable(pm.fn[OUTPUT],"vgis-y.txt",Y,D,M,"%.6lf",TRANSPOSE);
   gettimeofday(tv+3,NULL); tt[3]=clock();
 
   /* allocaltion */

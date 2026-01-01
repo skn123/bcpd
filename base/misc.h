@@ -23,4 +23,5 @@ void   randperm (int *a, int n);
 double product  (const double *a, int n);
 
 double volume   (const double *x, int D, int N);
+double lnvolume (const double *x, int D, int N);
 double det      (const double *A, const int D);

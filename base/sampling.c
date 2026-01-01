@@ -20,6 +20,7 @@
 
 #include<stdio.h>
 #include<stdlib.h>
+#include<string.h>
 #include<math.h>
 #include<assert.h>
 #include"kdtree.h"
@@ -31,23 +32,22 @@ double genrand64_real1(void);
 static void resampling(int *nums, const double *probs, int N, int M){
   int i; double u =genrand64_real1()/(double)M;
   for(i=0;i<N;i++){
-    nums[i]=floor((probs[i]-u)*M)+1; 
+    nums[i]=floor((probs[i]-u)*M)+1;
+    nums[i]=nums[i]<0?0:nums[i];
     u+=(nums[i]/(double)M)-probs[i];
   }
 }
 
-static void downsample_a(double *x, int *U, int L, double *X, int D, int N){
+static void downsample_a(int *U, int L, double *X, int D, int N){
   int d,l; if(L>N){goto err01;}
-
-  randperm(U,N); for(d=0;d<D;d++)for(l=0;l<L;l++){x[d+D*l]=X[d+D*U[l]];}
-  return;
+  randperm(U,N); return;
 
   err01:
   printf("\n\n  ERROR: L<=N must be satisfied in the function 'downsample_a'. Abort.\n\n");
   exit(EXIT_FAILURE);
 }
 
-static void downsample_b(double *x, int *U, int L, double *X, int D, int N, double e){
+static void downsample_b(int *U, int L, double *X, int D, int N, double e){
   int *S,*T,*a,*c; double *w,*v; int sd=sizeof(double),si=sizeof(int);
   int d,j,n,q,l=0,mtd=MAXTREEDEPTH; double val=0;
   /* allocation */
@@ -68,44 +68,107 @@ static void downsample_b(double *x, int *U, int L, double *X, int D, int N, doub
   /* resampling */
   resampling(c,w,N,L);
   /* output */
-  for(n=0;n<N;n++)for(j=0;j<c[n];j++){U[l]=n;for(d=0;d<D;d++){x[d+D*l]=X[d+D*n];} l++;}
+  for(n=0;n<N;n++)for(j=0;j<c[n];j++) U[l++]=n;
 
   free(T);free(a);free(v);
   free(S);free(w);free(c);
 }
 
-/* voxel grid filter */
-static void downsample_c(double *x, int *U, int L, double *X, int D, int N, double e){
-  int d,j,l=0,n,num; size_t K; int *v,*c,*np,*cum,*div; double *w,*max,*min; int sd=sizeof(double),si=sizeof(int);
-  double val=0;
+static size_t voxelize(int *v, double *X, int D, int N, double e){
+  int d,j,n; size_t *cum,*div; double *max,*min; double w; size_t K;
+  int sd=sizeof(double),ss=sizeof(size_t); double val=0;
+
   /* allocation */
-  v=calloc(N,si); max=calloc(D,sd); div=calloc(D,si); w=calloc(N,sd);
-  c=calloc(N,si); min=calloc(D,sd); cum=calloc(D,si);
+  max=calloc(D,sd); div=calloc(D,ss);
+  min=calloc(D,sd); cum=calloc(D,ss);
   /* bounding box */
   for(d=0;d<D;d++){min[d]=X[d];for(n=0;n<N;n++){min[d]=X[d+D*n]<min[d]?X[d+D*n]:min[d];}}
   for(d=0;d<D;d++){max[d]=X[d];for(n=0;n<N;n++){max[d]=X[d+D*n]>max[d]?X[d+D*n]:max[d];}}
   /* divide in grid & count points in a voxel */
-  for(d=0;d<D;d++) div[d]=ceil((max[d]-min[d])/e);
-  cum[0]=1; cum[1]=div[0]; for(d=2;d<D;d++) cum[d]=cum[d-1]*div[d-1];
-  K=cum[D-1]*div[D-1]; if(K>=1e8){printf("  ERROR: Voxel grid width is too small. Abort.\n\n"); exit(EXIT_FAILURE);}
-  np=calloc(K,si);
+  for(d=0;d<D;d++){w=max[d]-min[d]; div[d]=w<e?1:(int)ceil(w/e);}
+  cum[0]=1; for(d=1;d<D;d++) cum[d]=cum[d-1]*div[d-1];
   for(n=0;n<N;n++){v[n]=0;for(d=0;d<D;d++){j=floor((X[d+D*n]-min[d])/e);j-=(j==div[d])?1:0;v[n]+=cum[d]*j;}}
-  for(n=0;n<N;n++) np[v[n]]++;
+  /* count the number of voxels (including empty voxels) */
+  K=cum[D-1]*div[D-1];
+
+  free(max); free(div);
+  free(min); free(cum);
+  return K;
+}
+
+/* voxel grid filter */
+static void downsample_c(int *U, int L, double *X, int D, int N, double e){
+  int l=0,j,n,num; size_t K; int *v,*c,*np; double *w; int sd=sizeof(double),si=sizeof(int); double val=0;
+
+  /* allocation */
+  v=calloc(N,si); w=calloc(N,sd);
+  c=calloc(N,si);
+
+  /* devide into voxels */
+  K=voxelize(v,X,D,N,e); if(K>=1e8){printf("  ERROR: Voxel grid width is too small. Abort.\n\n"); exit(EXIT_FAILURE);}
+  np=calloc(K,si);
   /* sampling probabilities */
+  for(n=0;n<N;n++) np[v[n]]++;
   for(n=0;n<N;n++){num=np[v[n]];assert(num>0);w[n]=1.0f/num;val+=w[n];}
   for(n=0;n<N;n++) w[n]/=val;
   /* resampling */
   resampling(c,w,N,L);
   /* output */
-  for(n=0;n<N;n++)for(j=0;j<c[n];j++){U[l]=n;for(d=0;d<D;d++){x[d+D*l]=X[d+D*n];} l++;}
+  for(n=0;n<N;n++)for(j=0;j<c[n];j++) U[l++]=n;
 
-  free(v);free(max);free(div);free(w);
-  free(c);free(min);free(cum);free(np);
+  free(v); free(w);
+  free(c); free(np);
 }
 
-void downsample(double *x, int *U, int L, double *X, int D, int N, double e){
-  if     (e<0) downsample_c(x,U,L,X,D,N,-e);
-  else if(e>0) downsample_b(x,U,L,X,D,N, e);
-  else         downsample_a(x,U,L,X,D,N);
+void vgisample(int *U, int L, double *X, int D, double *fx, int Df, int N, double e, double eps){
+  int l=0,j,d,n,num; size_t k,K; int *v,*c,*np; double *w; int sd=sizeof(double),si=sizeof(int); double val=0;
+  double *ave,*var,*max,*sum; int flag=e<0?1:0; e*=e<0?-1:1; assert(e>0);
+
+  /* allocation */
+  v=calloc(N,si);
+  w=calloc(N,sd);
+  c=calloc(N,si);
+
+  /* devide into voxels */
+  K=voxelize(v,X,D,N,e); if(K>=1e8){printf("  ERROR: Voxel grid width is too small. Abort.\n\n"); exit(EXIT_FAILURE);}
+
+  /* allocation */
+  np =calloc(K,si); ave=calloc(K,sd);
+  max=calloc(N,sd); var=calloc(K,sd);
+  sum=calloc(N,sd);
+
+  for(n=0;n<N; n++) np[v[n]]++;
+  for(d=0;d<Df;d++){
+    memset(ave,0,K*sd);
+    memset(var,0,K*sd);
+
+    for(n=0;n<N;n++) ave[v[n]]+=fx[d+Df*n];
+    for(k=0;k<K;k++)if(np[k]) ave[k]/=np[k];
+    for(n=0;n<N;n++) var[v[n]]+=SQ(fx[d+Df*n]-ave[v[n]]);
+    for(k=0;k<K;k++)if(np[k]) var[k]/=np[k];
+    for(n=0;n<N;n++) max[n] =fmax(max[n],var[v[n]]);
+    for(n=0;n<N;n++) sum[n]+=var[v[n]];
+  }
+
+  /* sampling probabilities */
+  if( flag)for(n=0;n<N;n++) w[n]=sqrt(max[n])+eps;
+  if(!flag)for(n=0;n<N;n++) w[n]=sqrt(sum[n])+eps;
+  for(n=0;n<N;n++) val +=w[n];
+  for(n=0;n<N;n++) w[n]/=val;
+
+  /* resampling */
+  resampling(c,w,N,L);
+  /* output */
+  for(n=0;n<N;n++)for(j=0;j<c[n];j++)if(l<L) U[l++]=n;
+
+  free(w); free(ave); free(np);
+  free(v); free(var);
+  free(c); free(max);
+}
+
+void downsample(int *U, int L, double *X, int D, int N, double e){
+  if     (e<0) downsample_c(U,L,X,D,N,-e);
+  else if(e>0) downsample_b(U,L,X,D,N, e);
+  else         downsample_a(U,L,X,D,N);
 }
 
