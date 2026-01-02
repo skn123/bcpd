@@ -19,6 +19,6 @@
 // THE SOFTWARE.
 
 void heap_init    (int *heap);
-void heap_downkey (int *heap, double *keys, int node, double key);
-void heap_insert  (int *heap, double *keys, int node, double key);
-void heap_extract (int *node, int *heap, const double *keys);
+void heap_insert  (int *heap, int *idx, double *keys, int node, double key);
+void heap_extract (int *node, int *heap, int *idx, const double *keys);
+void heap_downkey (int *heap, int *idx, double *keys, int node, double key);

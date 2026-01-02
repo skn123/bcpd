@@ -45,9 +45,10 @@ void gaussprod(
        int            Df,    /*  I  | const.            | dimension f               */
        int            M,     /*  I  | const.            | #points in Y              */
        int            N,     /*  I  | const.            | #points in X              */
+       const int     *Q,     /*  I  | const.            | nystrom sample indices    */
        int            P,     /*  I  | const.            | #nystrom samples          */
        double         h,     /*  I  | const.            | gauss width for X, Y      */
-       double        *hf,    /*  I  | const.            | gauss widths for fx, fy   */
+       const double  *hf,    /*  I  | const.            | gauss widths for fx, fy   */
        double         dlt,   /*  I  | const.            | neighbor width rate for h */
        double         lim,   /*  I  | const.            | maximum radius for kdtree */
        int            flg    /*  I  | const.            | flag:local+reuse+trans    */
@@ -55,13 +56,12 @@ void gaussprod(
   int d,p,i,j,k,I,J,L=M+N; const double *A,*B,*F,*G; int info; char uplo='U'; int *e=NULL;
   double *Z=NULL,*W=NULL,*K=NULL,*E=NULL; double reg=1e-6,rad=fmin(h*dlt,lim); int si=0,sd=0;
   int mtd=MAXTREEDEPTH; int *a,*u,*S,*bi; double *bd; double val;
-  int tr=flg&GRAM_FLAG_TRANS; int nc=1+(tr?0:(D+Df)); static int first=1;
+  int tr=flg&GRAM_FLAG_TRANS; int nc=1+(tr?0:(D+Df));
 
   if(fx) assert(fy); else assert(fy==NULL&&Df==0);
   if(tr) assert(nc==1&&U==NULL&&V==NULL);
 
-  /* memory: always use the same allocation if P>0 */
-  if(P){e=wi+si;si+=L;Z=wd+sd;sd+=D*P;W=wd+sd;sd+=Df*P;K=wd+sd;sd+=P*P;E=wd+sd;sd+=P*nc;}
+  if(P){Z=wd+sd;sd+=D*P;W=wd+sd;sd+=Df*P;K=wd+sd;sd+=P*P;E=wd+sd;sd+=P*nc;}
   /* init */
   if(tr) {I=N;J=M;A=X;B=Y;F=fx;G=fy;}
   else   {I=M;J=N;A=Y;B=X;F=fy;G=fx;}
@@ -98,9 +98,9 @@ void gaussprod(
     } while(u[i]);
   } return;
 
-  nystrom: if(first) randperm(e,L); first=0;
+  nystrom:
   /* sampling */
-  for(p=0;p<P;p++){k=e[p];
+  for(p=0;p<P;p++){k=Q[p];
     if(k<M){/**/; for(d=0;d<D;d++){Z[d+D*p]=Y[d+D*k];} if(fy)for(d=0;d<Df;d++){W[d+Df*p]=fy[d+Df*k];}}
     else   {k-=M; for(d=0;d<D;d++){Z[d+D*p]=X[d+D*k];} if(fx)for(d=0;d<Df;d++){W[d+Df*p]=fx[d+Df*k];}}
   }

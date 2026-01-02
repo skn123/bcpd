@@ -26,56 +26,54 @@
 #define LAST (*heap)
 #define ROOT 1
 
-static void swap(int *a, int *b){ int tmp=*a; *a=*b; *b=tmp; }
-
-static void shiftup(int *heap, const double *keys, int i){ 
-  int p; assert(i>=1&&i<=LAST); 
-  for(;(p=floor(i/2))&&(keys[heap[p]]>keys[heap[i]]);i=p){ swap(heap+p,heap+i); }
+static void swap(int *heap, int *idx, int i, int j){
+  int tmp=heap[i]; heap[i]=heap[j]; heap[j]=tmp;
+  idx[heap[i]]=i;
+  idx[heap[j]]=j;
 }
 
-static void shiftdn(int *heap, const double *keys, int i){
-  int c,cl,cr; assert(i);
+static void shiftup(int *heap, int *idx, const double *keys, int i){
+  int p; assert(i>=1&&i<=LAST);
+  for(;(p=i/2)&&(keys[heap[p]]>keys[heap[i]]);i=p) swap(heap,idx,p,i);
+}
 
+static void shiftdn(int *heap, int *idx, const double *keys, int i){
+  int c,cl,cr; assert(i);
   for(;(cl=2*i)<=LAST;i=c){ cr=cl+1;
     c=(LAST==cl)?cl:(keys[heap[cl]]<keys[heap[cr]]?cl:cr);
-    if(keys[heap[i]]>keys[heap[c]]) swap(heap+c,heap+i);
+    if(keys[heap[i]]>keys[heap[c]]) swap(heap,idx,c,i);
     else break;
   }
 }
 
-static void heap_find(int *i, const int *heap, int node){
-  int j;
-  for(j=1;j<=LAST&&heap[j]!=node;j++){}
-  *i=j>LAST?0:j;
-}
-
 void heap_init(int *heap){LAST=0;}
 
-void heap_insert(int *heap, double *keys, int node, double key){
+void heap_insert(int *heap, int *idx, double *keys, int node, double key){
   heap[++LAST]=node;
+  idx [node]=LAST;
   keys[node]=key;
-  shiftup(heap,keys,LAST);
+  shiftup(heap,idx,keys,LAST);
 }
 
-void heap_extract(int *node, int *heap, const double *keys){
+void heap_extract(int *node, int *heap, int *idx, const double *keys){
   *node=heap[ROOT];
   heap[ROOT]=heap[LAST--];
-  shiftdn(heap,keys,ROOT);
+  if(LAST>=ROOT) {idx[heap[ROOT]]=ROOT; shiftdn(heap,idx,keys,ROOT);}
 }
 
-void heap_downkey(int *heap, double *keys, int node, double key){
+void heap_downkey(int *heap, int *idx, double *keys, int node, double key){
   int i; assert(key<keys[node]);
-  keys[node]=key;
-  heap_find(&i,heap,node); assert(i); //  heap must contain 'node' (=heap[i]).
-  shiftup(heap,keys,i);
-}  
+  keys[node]=key; i=idx[node];
+  assert(i>=1&&i<=LAST);
+  shiftup(heap,idx,keys,i);
+}
 
 void print_heap(const int *heap, const double *keys, int mode){
   int i,j,d=1; int L,R;
   for(i=1;i<=LAST;i++){
     if(i%d==0) { d++;
-      L=pow(2,d-2);
-      R=pow(2,d-1)-1;
+      L=1<<(d-2);
+      R=(1<<(d-1))-1;
       R=LAST<R?LAST:R;
       if(R<=LAST){ 
         for(j=L;j<=R;j++){
@@ -85,6 +83,5 @@ void print_heap(const int *heap, const double *keys, int mode){
       } 
     }
   } printf("\n");
-
 }
 

@@ -38,23 +38,21 @@ static inline void divide(
    int             N,    /*   I  |    | #points                     */
    int             p     /*   I  |    | current depth               */
   ){
-  int k,i=0,j=0,e=0,c=K/2,d=p%D; double med,val; double *w=v+N;
+  int k,i=0,j=0,e=0,d=p%D; double med,val; double *w=v+N;
   int *sz=b+N,*bl=b+2*N,*bc=b+3*N,*br=b+4*N;
 
-  *sz=K; /* store original array size */
+  *sz=K; if(K<=1) return;
   for(k=0;k<K;k++){v[k]=X[d+D*b[k]];} swap(v,v+K/2);
 
-  if (K==1) bl[0]=b[c];
-  else { med=median(v,w,K);
-    for(k=0;k<K;k++){ val=X[d+D*b[k]];
-      if      (val<med) bl[i++]=b[k];
-      else if (val>med) br[j++]=b[k];
-      else              bc[e++]=b[k];
-    }
-    for(k=0;k<i;k++) b[k    ]=bl[k];
-    for(k=0;k<e;k++) b[k+i  ]=bc[k];
-    for(k=0;k<j;k++) b[k+i+e]=br[k];
+  med=median(v,w,K);
+  for(k=0;k<K;k++){ val=X[d+D*b[k]];
+    if      (val<med) bl[i++]=b[k];
+    else if (val>med) br[j++]=b[k];
+    else              bc[e++]=b[k];
   }
+  for(k=0;k<i;k++) b[k    ]=bl[k];
+  for(k=0;k<e;k++) b[k+i  ]=bc[k];
+  for(k=0;k<j;k++) b[k+i+e]=br[k];
 }
 
 void kdtree(
@@ -94,10 +92,10 @@ int *kdtree_build(const double *X, int D, int N){
   return T;
 }
 
-static double dist(const double *x, const double *y, double D){
+static double dist2(const double *x, const double *y, int D){
   int d; double val=0;
   for(d=0;d<D;d++) val+=SQ(x[d]-y[d]);
-  return sqrt(val);
+  return val;
 }
 
 void eballsearch_next(
@@ -112,41 +110,21 @@ void eballsearch_next(
        int            N   /*  I  | const.| #points                    */
      ){
 
-  int d,p,nl,nr,n=T[3*N],state=1; double u,v;
+  int d,p,nl,nr,n,state=1; double u,v,e2=e*e;
 
+  if(N<=0){*m=-1;return;} n=T[3*N];
   if(*q==0) S[(*q)++]=n;
   while((*q)&&state){ n=S[--(*q)];
      nl=T[n+N*1]; p=T[n];
      nr=T[n+N*2]; d=p%D;
 
-     if(dist(y,X+D*n,D)<=e){*m=n;state=0;}
+     if(dist2(y,X+D*n,D)<=e2){*m=n;state=0;}
 
-     v=y[d]-X[d+D*n]; u=fabs(v);
-     if   (v>0){if(nr>=0)S[(*q)++]=nr; if(nl>=0&&u<=e)S[(*q)++]=nl;}
-     else      {if(nl>=0)S[(*q)++]=nl; if(nr>=0&&u<=e)S[(*q)++]=nr;}
+     v=y[d]-X[d+D*n]; u=v*v;
+     if   (v>0){if(nl>=0&&u<=e2)S[(*q)++]=nl; if(nr>=0)S[(*q)++]=nr;}
+     else      {if(nr>=0&&u<=e2)S[(*q)++]=nr; if(nl>=0)S[(*q)++]=nl;}
 
   }  if( state) *m=-1;
-}
-
-static void nn_approx(
-       int           *i,  /*  O  | const.| subspace id               */
-       double        *e,  /*  O  | const.| distance                  */
-       const double  *y,  /*  I  | const.| the point of interest     */
-       const double  *X,  /*  I  |  DxN  | points                    */
-       const int     *T,  /*  I  | 3xN+1 | kdtree                    */
-       int            D,  /*  I  | const.| dimension                 */
-       int            N   /*  I  | const.| #points                   */
-     ){
-
-  int d,n=T[3*N],nl,nr; double v,l; *e=1e250;
-  while(1){
-     nl=T[n+N*1]; d=T[n]%D;
-     nr=T[n+N*2]; v=y[d]-X[d+D*n];
-     l=dist(y,X+D*n,D); if(l<*e){*e=l;*i=n;}
-     if      (v> 0&&nr>=0) n=nr;
-     else if (v<=0&&nl>=0) n=nl;
-     else    break;
-  }
 }
 
 void nnsearch(
@@ -159,21 +137,23 @@ void nnsearch(
        int            N   /*  I  | const.| #points                   */
      ){
 
-  int d,p,q=0,n=T[3*N],nl,nr; int S[MAXTREEDEPTH]; double u,v,dst;
+  int d,p,q=0,n=T[3*N],nl,nr; int S[MAXTREEDEPTH]; double u,v,e2,dst2;
 
-  nn_approx(i,e,y,X,T,D,N); S[q++]=n;
+  e2=1e250; *i=-1; if(N>0) S[q++]=n;
   while(q){assert(q>=0||(q&&S[q-1]>=0)); n=S[--q];
      nl=T[n+N*1]; p=T[n]; assert(p<MAXTREEDEPTH);
      nr=T[n+N*2]; d=p%D;
 
-     dst=dist(y,X+D*n,D); if(dst<=*e){*e=dst;*i=n;}
+     dst2=dist2(y,X+D*n,D); if(dst2<=e2){e2=dst2;*i=n;}
 
-     v=y[d]-X[d+D*n]; u=fabs(v);
-     if   (v>0){if(nr>=0)S[q++]=nr; if(nl>=0&&u<=*e)S[q++]=nl;}
-     else      {if(nl>=0)S[q++]=nl; if(nr>=0&&u<=*e)S[q++]=nr;}
+     v=y[d]-X[d+D*n]; u=v*v;
+     if   (v>0){if(nl>=0&&u<=e2)S[q++]=nl; if(nr>=0)S[q++]=nr;}
+     else      {if(nr>=0&&u<=e2)S[q++]=nr; if(nl>=0)S[q++]=nl;}
   }
+ *e=sqrt(e2);
 }
 
+#define MAXSIZE 256
 void knnsearch(
        int           *Q,  /*  O  |  1+K  | k nearest neighbors (+size) */
        int            K,  /* I/O | const.| #neighbors                  */
@@ -186,26 +166,31 @@ void knnsearch(
        int            N   /*  I  | const.| #points                     */
      ){
 
-  int d,p,q=0,k=0,n=T[3*N],nl,nr,kmax=0,num; int S[MAXTREEDEPTH];
-  double u,v,dst,val;
+  int d,p,q=0,k=0,n=T[3*N],nl,nr,kmax=-1,num; int S[MAXTREEDEPTH];
+  double u,v,dst2,val,vals[1+MAXSIZE],dmax,e2=e*e;
 
-  num=0; for(k=1;k<K;k++) Q[k]=-1;
+  assert(K<MAXSIZE);
+  if(N<=0||K<=0){*Q=0; return;}
+  num=0; for(k=1;k<=K;k++) Q[k]=-1;
 
   S[q++]=n;
   while(q){assert(q>=0||(q&&S[q-1]>=0)); n=S[--q];
     nl=T[n+N*1]; p=T[n]; assert(p<MAXTREEDEPTH);
     nr=T[n+N*2]; d=p%D;
 
-    dst=dist(y,X+D*n,D);
-    if(dst<e&&n!=me){ /* exclude y if 'me' is non-negative */
-      if(num< K){Q[++num]=n;}
-      else      {Q[kmax ]=n;assert(kmax>0);} /* replace with current max */
-      if(num==K) for(k=1;k<=K;k++){val=dist(y,X+D*Q[k],D);if(k==1||val>e){e=val;kmax=k;}} /* update max */
+    dst2=dist2(y,X+D*n,D);
+    if(dst2<e2&&n!=me){ dmax=-1.0;/* exclude y if 'me' is non-negative */
+      if(num< K){Q[++num]=n; vals[num] =dst2;}
+      else      {Q[kmax] =n; vals[kmax]=dst2;}
+      if(num==K){
+        for(k=1;k<=K;k++){val=vals[k];if(val>dmax){dmax=val;kmax=k;}}
+        e2=dmax;
+      }
     }
 
-    v=y[d]-X[d+D*n]; u=fabs(v);
-    if   (v>0){if(nl>=0&&u<=e)S[q++]=nl; if(nr>=0)S[q++]=nr;}
-    else      {if(nr>=0&&u<=e)S[q++]=nr; if(nl>=0)S[q++]=nl;}
+    v=y[d]-X[d+D*n]; u=v*v;
+    if   (v>0){if(nl>=0&&u<=e2)S[q++]=nl; if(nr>=0)S[q++]=nr;}
+    else      {if(nr>=0&&u<=e2)S[q++]=nr; if(nl>=0)S[q++]=nl;}
   } *Q=num;
 }
 

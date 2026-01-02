@@ -25,4 +25,4 @@ double imquad   (const double *x, const double *y, int D, double h);
 double rational (const double *x, const double *y, int D, double h);
 double neural   (const double *x, const double *y, int D, double h);
 double mykernel (const double *x, const double *y, int D, double h);
-double anigauss (const double *x, const double *y, int D, double *w);
+double anigauss (const double *x, const double *y, int D, const double *w);

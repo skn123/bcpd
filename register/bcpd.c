@@ -87,26 +87,23 @@ static void lowrank_encode(
   int             ssm
   ){
 
-  int d,i,j,k,m; double *A,*C,*S,*W; char uplo='U'; int D0=D;
+  int d,i,j,k,m; double *A,*C,*W; char uplo='U'; int D0=D;
   int info; double val,cc; int sd=0;
 
   if(ssm){M=D*M;D=1;} /* ssm order: xyzxyz */
 
   /* allocation */
   W=wd+sd;sd+=D*M; C=wd+sd;sd+=M*K;
-  A=wd+sd;sd+=K*K; S=wd+sd;sd+=K*K;
+  A=wd+sd;sd+=K*K;
 
   cc=lmd*SQ(*r/(*s));
   for(m=0;m<M;m++)for(k=0;k<K;k++) C[m+M*k]=w[ssm?(m/D0):m]*Q[m+M*k];
   for(k=0;k<K;k++)for(d=0;d<D;d++){B[k+K*d]=0;for(m=0;m<M;m++) B[k+K*d]+=C[m+M*k]*E[d+D*m];}
   #pragma omp parallel for private (j) private (m) private(val)
   for(i=0;i<K;i++)for(j=0;j<K;j++){val=0;for(m=0;m<M;m++){val+=Q[m+M*i]*C[m+M*j];} A[i+K*j]=val;}
-  for(i=0;i<K;i++)for(j=0;j<K;j++) S[i+K*j]=A[i+K*j];
   for(k=0;k<K;k++) A[k+K*k]+=cc/L[k];
   dpotrf_(&uplo,&K,A,&K,&info);         if(info!=0){goto err02;}
   dpotrs_(&uplo,&K,&D,A,&K,B,&K,&info); if(info!=0){goto err03;}
-  dpotrs_(&uplo,&K,&K,A,&K,S,&K,&info); if(info!=0){goto err04;}
-  for(i=0;i<K;i++)for(j=0;j<K;j++) A[i+K*j]=L[i]*((i==j?1:0)-S[j+K*i]);
   for(m=0;m<M;m++)for(d=0;d<D;d++) W[m+M*d]=w[ssm?(m/D0):m]*E[d+D*m];
   for(m=0;m<M;m++)for(d=0;d<D;d++)for(k=0;k<K;k++) W[m+M*d]-=C[m+M*k]*B[k+K*d];
   for(m=0;m<M;m++)for(d=0;d<D;d++) W[m+M*d]/=cc;
@@ -115,7 +112,6 @@ static void lowrank_encode(
   return;
   err02: printf("ERROR: The Cholesky factorization of A failed at the update of v. Retry.\n");     exit(EXIT_FAILURE);
   err03: printf("ERROR: Solving linear equations AX=B failed at the update of v.\n");              exit(EXIT_FAILURE);
-  err04: printf("ERROR: Solving linear equations AX=S failed at the update of v.\n");              exit(EXIT_FAILURE);
 }
 
 static void lowrank_decode(
@@ -131,7 +127,10 @@ static void lowrank_decode(
   ){
   int d,k,m; double val;
   if(ssm){M=D*M;D=1;}
-  for(d=0;d<D;d++)for(m=0;m<M;m++){val=0;for(k=0;k<K;k++){val+=Q[m+M*k]*B[k+K*d];} v[d+D*m]=u[d+D*m]=val; u[d+D*m]+=Y[d+D*m];}
+  for(d=0;d<D;d++){
+    #pragma omp parallel for private(k, val)
+    for(m=0;m<M;m++){val=0;for(k=0;k<K;k++){val+=Q[m+M*k]*B[k+K*d];} v[d+D*m]=u[d+D*m]=val; u[d+D*m]+=Y[d+D*m];}
+  }
 }
 
 static void invlinear(double *z, const double *y, int D, int M, const double *s, const double *R, const double *t, char type, double *w, int *ipiv){
@@ -175,7 +174,7 @@ int bcpd(
   double *pout,*c/*N*/,*mx,*vx/*D*/,*mf,*vf,*hf/*Df*/,*B/*KD*/,*E/*MD*/,*Q/*MK*/,*L/*K*/,*G/*MM*/,*G1/*MM*/,*G2/*MM*/;
   double *b/*M*/,*q/*N*/,*f/*N*/,*PX/*DM*/,*sx/*D*M*nlp*/,*sy/*D*M*nlp*/,*ix/*DM*/,*lw/*DD*/;
   double *xb/*D*/,*ub/*D*/,*phi/*DD*/,*psi/*DD*/,*Sxu/*DD*/,*dS/*D*/,*wk/*10D*/; struct timeval tick;
-  double *wld,*wdd/*K(K+11)*/,*wgd/*M+N+J+JJ*/; int *Tx,*Ty/*1+3N*/,*wdi/*M*/,*wgi/*M+N*/; double bet;
+  double *wld,*wdd/*K(K+11)*/,*wgd/*M+N+J+JJ*/; int *Tx,*Ty/*1+3N*/,*wdi/*M*/,*wgi/*M+N*/,*id/*M+N*/; double bet;
   int d,i,j,m,n,lp,D,Df,K,M,N,J; int *ipiv,info,lwork1; char jobz='V',uplo='U'; double tr=0; int max;
   double omg,lmd,kpa,cnv; int nlp,opt; int sd=0,si=0; int T=pm.opt&PW_OPT_LOCAL,db=pm.opt&PW_OPT_DBIAS;
   double clc,cps=CLOCKS_PER_SEC,*treal=pf,*tcpu=pf+pm.nlp,*rprog=pf+2*pm.nlp; int pflog=pm.opt&PW_OPT_PFLOG;
@@ -216,9 +215,10 @@ int bcpd(
   wld=K?wd+sd:NULL; sd+=M*K*(ssm?D:1)+(K?M*D+2*K*K:0);
   skip_G_alloc:
   /* gaussprod */
+  if(J){id=wi+si; si+=M+N; randperm(id,M+N);}
   wgd=(J||T)?wd+sd:NULL;
   wgi=(J||T)?wi+si:NULL;
-  if(J){sd+=2*J*(1+D+Df+J); si+=M+N;}
+  if(J){sd+=2*J*(1+D+Df+J);}
   if(T){sd+=2*max;si+=max*(8+mtd);}
   /* tree */
   Tx=T?wi+si:NULL; si+=T?3*max+1:0;
@@ -296,10 +296,10 @@ int bcpd(
     for(n=0;n<N;n++) c[n]=pout[n]*(omg/(1-omg))/det;
     for(d=0;d<Df;d++) hf[d]=e[d]/sqrt(zeta);
     for(m=0;m<M;m++) b[m]=a[m]*exp(-(D/2)*sgm[m]*SQ((*s)/(*r)));
-    gaussprod(q,NULL,NULL,wgd,wgi,y,X,fy,fx,b,Ty,D,Df,M,N,J,*r,hf,dlt,lim,flg|GRAM_FLAG_TRANS|GRAM_FLAG_BUILD);/* Kt1 */
+    gaussprod(q,NULL,NULL,wgd,wgi,y,X,fy,fx,b,Ty,D,Df,M,N,id,J,*r,hf,dlt,lim,flg|GRAM_FLAG_TRANS|GRAM_FLAG_BUILD);/* Kt1 */
     for(n=0;n<N;n++) q[n]=1.0/(q[n]+c[n]); /* q */
     for(n=0;n<N;n++) f[n]=1.0-(q[n]*c[n]); /* f */
-    gaussprod(w,PX,Pfx,wgd,wgi,y,X,fy,fx,q,Tx,D,Df,M,N,J,*r,hf,dlt,lim,flg);
+    gaussprod(w,PX,Pfx,wgd,wgi,y,X,fy,fx,q,Tx,D,Df,M,N,id,J,*r,hf,dlt,lim,flg);
     for(m=0;m<M;m++){w[m]*=b[m];w[m]=w[m]<reg?reg:w[m];}
     for(d=0;d<D;d++)for(m=0;m<M;m++) PX[m+M*d]*=b[m];
     if(Df) for(d=0;d<Df;d++)for(m=0;m<M;m++) Pfx[m+M*d]*=b[m];
@@ -451,9 +451,11 @@ void interpolate1(
     for(m=0;m<M;m++)for(d=0;d<D;d++){val=E[d+D*m];for(k=0;k<K;k++){val-=Q[m+M*k]*B[k+K*d];} W[m+M*d]=val/cc;}
     /* interpolation */
     randperm(U,N);
-    for(i=0;i<K;i++)for(j=i;j<K;j++) A[i+K*j]=A[j+K*i]=kernel[pm.G](Y+D*U[i],Y+D*U[j],D,bet)+(i==j?1e-9:0);
+    for(i=0;i<K;i++)for(j=i;j<K;j++) A[i+K*j]=A[j+K*i]=kernel[pm.G](Y+D*U[i],Y+D*U[j],D,bet)+(i==j?1e-6:0);
+    #pragma omp parallel for private(d) private(m) private(val)
     for(k=0;k<K;k++)for(d=0;d<D;d++){val=0;for(m=0;m<M;m++){val+=kernel[pm.G](Y+D*U[k],y+D*m,D,bet)*W[m+M*d];} B[k+K*d]=val;}
     dposv_(&uplo,&K,&D,A,&K,B,&K,&info); assert(!info);
+    #pragma omp parallel for collapse(2) private(k) private(val)
     for(d=0;d<D;d++)for(n=0;n<N;n++){val=0;for(k=0;k<K;k++){val+=kernel[pm.G](Y+D*n,Y+D*U[k],D,bet)*B[k+K*d];} V[d+D*n]=val; u[d+D*n]=val+Y[d+D*n];}
     free(A);free(Q);free(wd);free(U);
     free(B);free(L);free(wi);
@@ -506,8 +508,13 @@ void interpolate2(
   B =calloc(K*D,sd); Qy=calloc(K*M*(ssm?D:1),sd);
   wd=calloc((ssm?D:1)*M*K+M*D+2*K*K,sd); ipiv=calloc(D,si);
 
-  if(ssm) for(k=0;k<K;k++)for(m=0;m<M;m++)for(d=0;d<D;d++) Qy[d+D*m+D*M*k]=Q[d+D*U[m]+D*N*k];
-  else    for(k=0;k<K;k++)for(m=0;m<M;m++) Qy[m+M*k]=Q[U[m]+N*k];
+  if(ssm)
+    #pragma omp parallel for private(m) private(d)
+    for(k=0;k<K;k++)for(m=0;m<M;m++)for(d=0;d<D;d++) Qy[d+D*m+D*M*k]=Q[d+D*U[m]+D*N*k];
+  else
+    #pragma omp parallel for private(m)
+    for(k=0;k<K;k++)for(m=0;m<M;m++) Qy[m+M*k]=Q[U[m]+N*k];
+
   invlinear(ix,x,D,M,s,R,t,type,lw,ipiv);
   for(m=0;m<M;m++)for(d=0;d<D;d++) E[d+D*m]=ix[d+D*m]-y[d+D*m];
 
@@ -518,6 +525,7 @@ void interpolate2(
   lowrank_decode(u,V,Y,Q,B,D,N,K,ssm);
 
   skip:
+  #pragma omp parallel for collapse(2) private(val) private(i)
   for(d=0;d<D;d++)for(n=0;n<N;n++){val=0;for(i=0;i<D;i++){val+=R[d+D*i]*u[i+D*n];} T[d+D*n]=(*s)*val+t[d];}
 
   free(B); free(Qy); free(wd); free(ipiv);
@@ -537,12 +545,12 @@ void interpolate_x(
   int d,k,m,K=30; double e,val; double *p,*P; int *T,*q,*Q;
   int me=-1; int si=sizeof(int),sd=sizeof(double);
 
-  K=K<M?K:M;
+  K=K<N?K:N;
 
   P=calloc(M*(K+1),sd); T=kdtree_build(X,D,N);
   Q=calloc(M*(K+1),si);
 
-  #pragma omp parallel for private (q) private (p) private (d) private (e) private (k)
+  #pragma omp parallel for private (q) private (p) private (d) private (e) private (k) private(val)
   for(m=0;m<M;m++){q=Q+(K+1)*m;p=P+(K+1)*m; knnsearch(q,K,2*r,y+D*m,me,X,T,D,N);
     if(*q){*p=0;for(k=1;k<=*q;k++){p[k]=gauss(y+D*m,X+D*q[k],D,r);*p+=p[k];}}
     else{*p=1.0;p[1]=1.0;*q=1;nnsearch(q+1,&e,y+D*m,X,T,D,N);}

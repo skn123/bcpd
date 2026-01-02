@@ -24,32 +24,32 @@
 #include<math.h>
 #include"heap.h"
 
-
 #define QLOADED (*Q)
 
 void dijkstra(
-    double        * D,   /* O |    N    | distance          */
-    int           * P,   /* O |    N    | previous node     */
-    int           * wk,  /* W |  2N+1   | tag(N), heap(N+1) */
-    const int    ** E,   /* I |  N x *  | edges             */
-    const double ** W,   /* I |  N x *  | weights           */
-    int             N,   /* I |  const. | #nodes            */
-    int             s    /* I |  const. | start  node       */
+    double        * D,   /* O |    N    | distance                */
+    int           * P,   /* O |    N    | previous node           */
+    int           * wk,  /* W |  3N+1   | tag(N),idx(N),heap(N+1) */
+    const int    ** E,   /* I |  N x *  | edges                   */
+    const double ** W,   /* I |  N x *  | weights                 */
+    int             N,   /* I |  const. | #nodes                  */
+    int             s    /* I |  const. | start  node             */
   ){
 
-  double d; int j,u,v; int *tag=wk,*Q=wk+N; assert(s<N);
+  double d; int j,u,v; int *tag=wk,*idx=wk+N,*Q=wk+2*N;
+  assert(s<N);
 
   /* initialization */
-  for(v=0;v<N;v++){D[v]=-1.0f;P[v]=-1;tag[v]=0;}
+  for(v=0;v<N;v++){D[v]=-1.0;P[v]=-1;tag[v]=0;}
   heap_init(Q); 
-  heap_insert(Q,D,s,0.0f);
+  heap_insert(Q,idx,D,s,0.0);
 
   /* main computation */
-  while(QLOADED){ heap_extract(&u,Q,D); tag[u]=1;
-    for(j=1;j<=*(E[u]);j++){v=E[u][j]; if(tag[v]) continue; 
+  while(QLOADED){ heap_extract(&u,Q,idx,D); tag[u]=1;
+    for(j=1;j<=*(E[u]);j++){v=E[u][j]; if(tag[v]) continue;
       d=D[u]+W[u][j]; /* temporal distance */
-      if     (0>D[v]){P[v]=u;heap_insert (Q,D,v,d);} /* newly found v  */
-      else if(d<D[v]){P[v]=u;heap_downkey(Q,D,v,d);} /* already found v */
+      if     (0>D[v]){P[v]=u; heap_insert (Q,idx,D,v,d);} /* newly found v   */
+      else if(d<D[v]){P[v]=u; heap_downkey(Q,idx,D,v,d);} /* already found v */
     }
   }
 }

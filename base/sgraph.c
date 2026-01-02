@@ -104,7 +104,7 @@ static void add_uedge(sgraph* sg, int u, int v, double w){
 }
 
 #define SQ(x) ((x)*(x))
-static double dist(const double *x, const double *y, double D, int L){
+static double dist(const double *x, const double *y, int D, int L){
   int d; double val=0;
   for(d=0;d<D;d++) val+=SQ(x[d]-y[d]);
   return L==1?sqrt(val):val;

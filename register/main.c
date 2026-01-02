@@ -91,7 +91,7 @@ void save_corresp(
     for(i=0;i<ct;i++){m=l[i];p[i]/=val;}
     max=c/val;mmax=0;for(i=0;i<ct;i++)if(p[i]>max){max=p[i];mmax=l[i]+1;}
     /* print P, c, e */
-    if(fpP){for(i=0;i<ct;i++)if(p[i]>1.0f/M){m=l[i];fprintf(fpP,"%d\t%d\t%lf\n",n+1,m+1,p[i]);}}
+    if(fpP){for(i=0;i<ct;i++)if(p[i]>1.0/M){m=l[i];fprintf(fpP,"%d\t%d\t%lf\n",n+1,m+1,p[i]);}}
     if(fpe){fprintf(fpe,"%d\t%d\t%lf\n",n+1,mmax?mmax:l[0],mmax?max:p[0]);}
     if(fpc){fprintf(fpc,"%d\t%d\n",n+1,mmax?1:0);}
   }
@@ -141,7 +141,7 @@ void scan_dwpm(int *dwn, double *dwr, double *vep, const char *arg){
   if(m!=3&&m!=4) goto err01;
   if(n<=0) goto err03;
   if(r< 0) goto err04;
-  if(isupper(c)){r*=-1.0f;} c=tolower(c);
+  if(isupper(c)){r*=-1.0;} c=tolower(c);
   if(c!='x'&&c!='y'&&c!='b') goto err02;
   if(vep<0&&r<0&&-r<1e-2) r=-1e-2;
   switch(c){
@@ -192,8 +192,8 @@ void pw_getopt(pwpm *pm, int argc, char **argv){ int opt;
   strcpy(pm->fn[FUNC_Y],"");        pm->vep=0.1;
   strcpy(pm->fn[FUNC_X],"");
   strcpy(pm->fn[COV_LQ],"");
-  pm->dwn[SOURCE]=0; pm->dwr[SOURCE]=0.0f;
-  pm->dwn[TARGET]=0; pm->dwr[TARGET]=0.0f;
+  pm->dwn[SOURCE]=0; pm->dwr[SOURCE]=0.0;
+  pm->dwn[TARGET]=0; pm->dwr[TARGET]=0.0;
   while((opt=getopt(argc,argv,"j:U:T:t:X:Y:C:D:z:u:r:w:l:b:k:g:d:e:c:n:N:G:J:K:o:x:y:f:s:hipqvaAW"))!=-1){
     switch(opt){
       case 'D': scan_dwpm(pm->dwn,pm->dwr,&(pm->vep),optarg); break;
@@ -461,7 +461,7 @@ int main(int argc, char **argv){
   geok=(pm.nnk||strlen(pm.fn[FACE_Y]))&&pm.tau>1e-5;
   if(geok&&!(pm.opt&PW_OPT_QUIET)) fprintf(stderr,"  Executing the FPSA algorithm ... ");
   if(geok){ sgraph* sg; double *Z; int aug=pm.opt&PW_OPT_AUGKD;
-    Z=aug?matrix_join(Y,D,fy,Df,N,pm.eta):NULL;
+    Z=aug?matrix_join(Y,D,fy,Df,M,pm.eta):NULL;
     if(aug)         sg=sgraph_from_points(Z,D+Df,M,pm.nnk,pm.nnr);
     else if(pm.nnk) sg=sgraph_from_points(Y,D,   M,pm.nnk,pm.nnr);
     else            sg=sgraph_from_mesh  (Y,D,   M,pm.fn[FACE_Y]);

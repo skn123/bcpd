@@ -39,12 +39,12 @@ double *geokdecomp(int *Knew, const double *Y, int D, int M, const int **E, cons
   lwork=K*10;
   kerns=calloc((  M  )*K,sd); L =calloc(M,sd); Q=calloc(M*K,  sd);
   prevs=calloc((  M  )*K,si); Lr=calloc(K,sd); A=calloc(K*K,  sd);
-  works=calloc((2*M+1)*K,si); U =calloc(M,si); C=calloc(lwork,sd);
+  works=calloc((3*M+1)*K,si); U =calloc(M,si); C=calloc(lwork,sd);
 
   /* geodesic kernel (partial) computation */
   downsample(U,K,(double*)Y,D,M,-0.05);
   #pragma omp parallel for
-  for(j=0;j<K;j++) dijkstra(kerns+M*j,prevs+M*j,works+(2*M+1)*j,(const int**)E,(const double**)W,M,U[j]);
+  for(j=0;j<K;j++) dijkstra(kerns+M*j,prevs+M*j,works+(3*M+1)*j,(const int**)E,(const double**)W,M,U[j]);
   for(j=0;j<K;j++)for(m=0;m<M;m++) kerns[m+M*j]=a*((kerns[m+M*j]<0)?0:gaussd(kerns[m+M*j],bet))+(1-a)*gaussd(dist(Y+D*m,Y+D*U[j],D),bet);
 
   /* approximate eigendecomposition */

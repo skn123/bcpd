@@ -58,13 +58,13 @@ static void downsample_b(int *U, int L, double *X, int D, int N, double e){
   kdtree(T,a,v,X,D,N);
   /* count #neighbors */
   #pragma omp parallel for private (j) private (q)
-  for(n=0;n<N;n++){j=q=0;w[n]=0.0f;
-    do{eballsearch_next(&j,S+mtd*n,&q,X+D*n,e,X,T,D,N);if(j>=0){w[n]+=1.0f;}} while(q);
-    assert(w[n]>=1.0f);
+  for(n=0;n<N;n++){j=q=0;w[n]=0.0;
+    do{eballsearch_next(&j,S+mtd*n,&q,X+D*n,e,X,T,D,N);if(j>=0){w[n]+=1.0;}} while(q);
+    assert(w[n]>=1.0);
   }
   /* sampling probabilities */
-  for(n=0;n<N;n++) val+=1.0f/(w[n]);
-  for(n=0;n<N;n++) w[n]=1.0f/(w[n]*val);
+  for(n=0;n<N;n++) val+=1.0/(w[n]);
+  for(n=0;n<N;n++) w[n]=1.0/(w[n]*val);
   /* resampling */
   resampling(c,w,N,L);
   /* output */
@@ -109,7 +109,7 @@ static void downsample_c(int *U, int L, double *X, int D, int N, double e){
   np=calloc(K,si);
   /* sampling probabilities */
   for(n=0;n<N;n++) np[v[n]]++;
-  for(n=0;n<N;n++){num=np[v[n]];assert(num>0);w[n]=1.0f/num;val+=w[n];}
+  for(n=0;n<N;n++){num=np[v[n]];assert(num>0);w[n]=1.0/num;val+=w[n];}
   for(n=0;n<N;n++) w[n]/=val;
   /* resampling */
   resampling(c,w,N,L);
@@ -162,7 +162,7 @@ void vgisample(int *U, int L, double *X, int D, double *fx, int Df, int N, doubl
   for(n=0;n<N;n++)for(j=0;j<c[n];j++)if(l<L) U[l++]=n;
 
   free(w); free(ave); free(np);
-  free(v); free(var);
+  free(v); free(var); free(sum);
   free(c); free(max);
 }
 

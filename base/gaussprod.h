@@ -41,9 +41,10 @@ void gaussprod(
        int            Df,    /*  I  | const.            | dimension f               */
        int            M,     /*  I  | const.            | #points in Y              */
        int            N,     /*  I  | const.            | #points in X              */
+       const int     *Q,     /*  I  | const.            | nystrom sample indices    */
        int            P,     /*  I  | const.            | #nystrom samples          */
        double         h,     /*  I  | const.            | gauss width for X, Y      */
-       double        *hf,    /*  I  | const.            | gauss widths for fx, fy   */
+       const double  *hf,    /*  I  | const.            | gauss widths for fx, fy   */
        double         dlt,   /*  I  | const.            | neighbor width rate for h */
        double         lim,   /*  I  | const.            | maximum radius for kdtree */
        int            flg    /*  I  | const.            | flag:local+reuse+trans    */
