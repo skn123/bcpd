@@ -138,5 +138,16 @@ double *read2dcm(int *nr, int *nc, const char *filename){
   err01: fprintf(stderr,"\n\n  File '%s': Not Found.\n\n",filename); exit(EXIT_FAILURE);
 }
 
+void save_variable(const char *prefix, const char *suffix,const double *var, int D, int J, char *fmt, int trans){
+  int d,j,nr,nc; char fn[256]; double **buf; int tr=(trans==TRANSPOSE);
+  strcpy(fn,prefix); nr=tr?J:D;
+  strcat(fn,suffix); nc=tr?D:J;
+  buf=calloc2d(nr,nc);
+
+  for(j=0;j<J;j++)for(d=0;d<D;d++){
+    if(tr) buf[j][d]=var[d+D*j];
+    else   buf[d][j]=var[d+D*j];
+  } write2d(fn,(const double**)buf,nr,nc,fmt,"NA"); free2d(buf,nr);
+}
 
 

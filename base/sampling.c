@@ -29,12 +29,11 @@
 
 double genrand64_real1(void);
 
-static void resampling(int *nums, const double *probs, int N, int M){
-  int i; double u =genrand64_real1()/(double)M;
-  for(i=0;i<N;i++){
-    nums[i]=floor((probs[i]-u)*M)+1;
-    nums[i]=nums[i]<0?0:nums[i];
-    u+=(nums[i]/(double)M)-probs[i];
+static void resampling(int *nums, const double *probs, int N, int M) {
+  int j,i=0; double cum=probs[0], u=genrand64_real1()/(double)M;
+  for(j=0;j<M;j++){
+    while(u>cum&&i<N-1){i++;cum+=probs[i];}
+    nums[i]++; u=((j+1)+genrand64_real1())/(double)M;
   }
 }
 
@@ -74,13 +73,13 @@ static void downsample_b(int *U, int L, double *X, int D, int N, double e){
   free(S);free(w);free(c);
 }
 
-static size_t voxelize(int *v, double *X, int D, int N, double e){
-  int d,j,n; size_t *cum,*div; double *max,*min; double w; size_t K;
+static size_t voxelize(int *v, size_t *div, size_t *cum, const double *X, int D, int N, double e){
+  int d,j,n; double *max,*min; double w; size_t K;
   int sd=sizeof(double),ss=sizeof(size_t); double val=0;
 
   /* allocation */
-  max=calloc(D,sd); div=calloc(D,ss);
-  min=calloc(D,sd); cum=calloc(D,ss);
+  max=calloc(D,sd);
+  min=calloc(D,sd);
   /* bounding box */
   for(d=0;d<D;d++){min[d]=X[d];for(n=0;n<N;n++){min[d]=X[d+D*n]<min[d]?X[d+D*n]:min[d];}}
   for(d=0;d<D;d++){max[d]=X[d];for(n=0;n<N;n++){max[d]=X[d+D*n]>max[d]?X[d+D*n]:max[d];}}
@@ -91,21 +90,23 @@ static size_t voxelize(int *v, double *X, int D, int N, double e){
   /* count the number of voxels (including empty voxels) */
   K=cum[D-1]*div[D-1];
 
-  free(max); free(div);
-  free(min); free(cum);
+  free(max);
+  free(min);
   return K;
 }
 
 /* voxel grid filter */
 static void downsample_c(int *U, int L, double *X, int D, int N, double e){
-  int l=0,j,n,num; size_t K; int *v,*c,*np; double *w; int sd=sizeof(double),si=sizeof(int); double val=0;
+  int l=0,j,n,num; size_t K; int *v,*c,*np; size_t *div,*cum; double *w,val=0;
+  int sd=sizeof(double),si=sizeof(int),ss=sizeof(size_t);
 
   /* allocation */
-  v=calloc(N,si); w=calloc(N,sd);
-  c=calloc(N,si);
+  v=calloc(N,si); div=calloc(D,ss);
+  c=calloc(N,si); cum=calloc(D,ss);
+  w=calloc(N,sd);
 
-  /* devide into voxels */
-  K=voxelize(v,X,D,N,e); if(K>=1e8){printf("  ERROR: Voxel grid width is too small. Abort.\n\n"); exit(EXIT_FAILURE);}
+  /* divide into voxels */
+  K=voxelize(v,div,cum,X,D,N,e); if(K>=1e8){printf("  ERROR: Voxel grid width is too small. Abort.\n\n"); exit(EXIT_FAILURE);}
   np=calloc(K,si);
   /* sampling probabilities */
   for(n=0;n<N;n++) np[v[n]]++;
@@ -116,26 +117,37 @@ static void downsample_c(int *U, int L, double *X, int D, int N, double e){
   /* output */
   for(n=0;n<N;n++)for(j=0;j<c[n];j++) U[l++]=n;
 
-  free(v); free(w);
-  free(c); free(np);
+  free(v); free(div); free(w);
+  free(c); free(cum); free(np);
 }
 
-void vgisample(int *U, int L, double *X, int D, double *fx, int Df, int N, double e, double eps){
-  int l=0,j,d,n,num; size_t k,K; int *v,*c,*np; double *w; int sd=sizeof(double),si=sizeof(int); double val=0;
-  double *ave,*var,*max,*sum; int flag=e<0?1:0; e*=e<0?-1:1; assert(e>0);
+static void geometry(double *geo, int *np, size_t K, size_t *div, size_t *cum, int D) {
+  size_t k;
+  #pragma omp parallel for
+  for(k=0;k<K;k++) { size_t coord; int d; int empty;
+    if(np[k]==0){continue;} empty=0;
+    for(d=0;d<D;d++){ coord=(k/cum[d])%div[d];
+      if (coord==0)       {empty++;} else if(np[k-cum[d]]==0){empty++;}
+      if (coord==div[d]-1){empty++;} else if(np[k+cum[d]]==0){empty++;}
+    } geo[k]=(empty==2*D)?0.0:(empty/(double)(2.0*D));
+  }
+}
+
+void vgisample(int *U, int L, double *X, int D, double *fx, int Df, int N, double e, double eps, double lmd){
+  int l=0,j,d,n,num; size_t k,K; int *v,*c,*np; double *w; int sd=sizeof(double),si=sizeof(int),ss=sizeof(size_t);
+  double val=0,*ave,*var,*max,*sum,*wf,*wg; size_t *cum,*div; int flag=e<0?1:0; e*=e<0?-1:1; assert(e>0);
 
   /* allocation */
-  v=calloc(N,si);
-  w=calloc(N,sd);
-  c=calloc(N,si);
+  v=calloc(N,si); div=calloc(D,ss); max=calloc(N,sd); wf=calloc(N,sd);
+  c=calloc(N,si); cum=calloc(D,ss); sum=calloc(N,sd); w =calloc(N,sd);
 
   /* devide into voxels */
-  K=voxelize(v,X,D,N,e); if(K>=1e8){printf("  ERROR: Voxel grid width is too small. Abort.\n\n"); exit(EXIT_FAILURE);}
+  K=voxelize(v,div,cum,X,D,N,e);
+  if(K>=1e8){printf("  ERROR: Voxel grid width is too small. Abort.\n\n"); exit(EXIT_FAILURE);}
 
   /* allocation */
-  np =calloc(K,si); ave=calloc(K,sd);
-  max=calloc(N,sd); var=calloc(K,sd);
-  sum=calloc(N,sd);
+  np=calloc(K,si); ave=calloc(K,sd);
+  wg=calloc(K,sd); var=calloc(K,sd);
 
   for(n=0;n<N; n++) np[v[n]]++;
   for(d=0;d<Df;d++){
@@ -151,8 +163,12 @@ void vgisample(int *U, int L, double *X, int D, double *fx, int Df, int N, doubl
   }
 
   /* sampling probabilities */
-  if( flag)for(n=0;n<N;n++) w[n]=sqrt(max[n])+eps;
-  if(!flag)for(n=0;n<N;n++) w[n]=sqrt(sum[n])+eps;
+  if( flag)for(n=0;n<N;n++) wf[n]=sqrt(max[n]);
+  if(!flag)for(n=0;n<N;n++) wf[n]=sqrt(sum[n]);
+
+  if(lmd>0) geometry(wg,np,K,div,cum,D);
+  for(n=0;n<N;n++) w[n]=fmax(wf[n],lmd*wg[v[n]])+eps;
+
   for(n=0;n<N;n++) val +=w[n];
   for(n=0;n<N;n++) w[n]/=val;
 
@@ -161,9 +177,9 @@ void vgisample(int *U, int L, double *X, int D, double *fx, int Df, int N, doubl
   /* output */
   for(n=0;n<N;n++)for(j=0;j<c[n];j++)if(l<L) U[l++]=n;
 
-  free(w); free(ave); free(np);
-  free(v); free(var); free(sum);
-  free(c); free(max);
+  free(w); free(ave); free(sum); free(np);
+  free(v); free(var); free(div); free(wf);
+  free(c); free(max); free(cum); free(wg);
 }
 
 void downsample(int *U, int L, double *X, int D, int N, double e){

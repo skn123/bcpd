@@ -19,5 +19,5 @@
 // THE SOFTWARE.
 
 void downsample  (int *U, int L, double *X, int D, int N, double e);
-void vgisample   (int *U, int L, double *X, int D, double *fx, int Df, int N, double e, double eps);
+void vgisample   (int *U, int L, double *X, int D, double *fx, int Df, int N, double e, double eps, double lmd);
 

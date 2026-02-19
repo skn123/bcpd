@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 typedef unsigned char byte;
+enum transpose {ASIS=0,TRANSPOSE=1};
 
 char    ** calloc2c (const int uw, const int ulen);
 double  ** calloc2d (const int M, const int N);
@@ -30,4 +31,4 @@ void       fprint2d (const double **a, int M, int N);
 
 double *   read2dcm (int *nr, int *nc, const char *filename);
 void       write2d  (const char *file, const double **X, int nr, int nc, const char *fmt, const char *na);
-
+void       save_variable (const char *prefix, const char *suffix,const double *var, int D, int J, char *fmt, int trans);

@@ -42,24 +42,6 @@
 #define SWAP(x, y) { int temp = x; x = y; y = temp; }
 
 void init_genrand64(unsigned long s);
-enum transpose {ASIS=0,TRANSPOSE=1};
-
-void save_variable(const char *prefix, const char *suffix,const double *var, int D, int J, char *fmt, int trans){
-  int d,j; char fn[256]; double **buf;
-  strcpy(fn,prefix); strcat(fn,suffix);
-  if(trans==TRANSPOSE){
-    buf=calloc2d(J,D);
-    for(j=0;j<J;j++)for(d=0;d<D;d++) buf[j][d]=var[d+D*j];
-    write2d(fn,(const double **)buf,J,D,fmt,"NA"); free2d(buf,J);
-  }
-  else {
-    buf=calloc2d(D,J);
-    for(j=0;j<J;j++)for(d=0;d<D;d++) buf[d][j]=var[d+D*j];
-    write2d(fn,(const double **)buf,D,J,fmt,"NA"); free2d(buf,D);
-  }
-
-  return;
-}
 
 void save_corresp(
     const char   *prefix,
@@ -133,24 +115,24 @@ void scan_kernel(pwpm *pm, const char *arg){ char *p;
   if(strstr(arg,"+")&&pm->nnk) pm->opt|=PW_OPT_AUGKD;
 }
 
-void scan_dwpm(int *dwn, double *dwr, double *vep, const char *arg){
-  char c; int n,m; double r; int vgis; *vep=-1.0;
+int scan_dwpm(int *dwn, double *dwr, double *vep, double *vlm, const char *arg){
+  char c; int n,m; double r; int vgis; *vep=-1.0; *vlm=0.0;
 
-  m=sscanf(arg,"%c,%d,%lf,%lf",&c,&n,&r,vep);
+  m=sscanf(arg,"%c,%d,%lf,%lf,%lf",&c,&n,&r,vep,vlm);
 
-  if(m!=3&&m!=4) goto err01;
+  if(m<3&&m>5) goto err01;
   if(n<=0) goto err03;
   if(r< 0) goto err04;
   if(isupper(c)){r*=-1.0;} c=tolower(c);
   if(c!='x'&&c!='y'&&c!='b') goto err02;
-  if(vep<0&&r<0&&-r<1e-2) r=-1e-2;
+  if(*vep<0&&r<0&&-r<1e-2) r=-1e-2;
   switch(c){
     case 'x': dwn[TARGET]=n; dwr[TARGET]=r; break;
     case 'y': dwn[SOURCE]=n; dwr[SOURCE]=r; break;
     case 'b': dwn[TARGET]=n; dwr[TARGET]=r;
               dwn[SOURCE]=n; dwr[SOURCE]=r; break;
   }
-  return;
+  return m;
   err01: printf("ERROR: The argument of '-D' must be 'char,int,real'. \n");         exit(EXIT_FAILURE);
   err02: printf("ERROR: The 1st argument of '-D' must be one of [x,y,b,X,Y,B]. \n");exit(EXIT_FAILURE);
   err03: printf("ERROR: The 2nd argument of '-D' must be positive.     \n");        exit(EXIT_FAILURE);
@@ -182,21 +164,22 @@ void check_prms(const pwpm pm, const pwsz sz){
   if(M<M0)     {printf("ERROR: -D: [Downsampling] M>M' is violated Abort.\n");      exit(EXIT_FAILURE);}
   if(N<N0)     {printf("ERROR: -D: [Downsampling] N>N' is violated Abort.\n");      exit(EXIT_FAILURE);}
   if(!strchr("exyn",pm.nrm)){printf("\n  ERROR: -u: Argument must be one of 'e', 'x', 'y' and 'n'. Abort.\n\n");exit(EXIT_FAILURE);}
+  if(!strchr("exyn",pm.nrf)){printf("\n  ERROR: -U: Argument must be one of 'e', 'x', 'y' and 'n'. Abort.\n\n");exit(EXIT_FAILURE);}
 }
 
-void pw_getopt(pwpm *pm, int argc, char **argv){ int opt;
+void pw_getopt(pwpm *pm, int argc, char **argv){ int opt; int num=0; int flag=0;
   strcpy(pm->fn[TARGET],"X.txt");   pm->omg=0.0; pm->cnv=1e-4; pm->K=0; pm->opt=0.0; pm->btn=0.20; pm->bet=2.0;
   strcpy(pm->fn[SOURCE],"Y.txt");   pm->lmd=2.0; pm->nlp= 500; pm->J=0; pm->dlt=7.0; pm->lim=0.15; pm->eps=1e-3;
   strcpy(pm->fn[OUTPUT],"output_"); pm->rns=0;   pm->llp=  30; pm->G=0; pm->gma=1.0; pm->kpa=ZERO; pm->nrm='e';
-  strcpy(pm->fn[FACE_Y],"");        pm->nnk=0;   pm->nnr=   0;          pm->fpv=0.1; pm->nrf='e';  pm->eta=1.0;
-  strcpy(pm->fn[FUNC_Y],"");        pm->vep=0.1;
+  strcpy(pm->fn[FACE_Y],"");        pm->nnk=0;   pm->nnr=   0;          pm->fpv=0.1; pm->eta=1.0;  pm->nrf='e';
+  strcpy(pm->fn[FUNC_Y],"");
   strcpy(pm->fn[FUNC_X],"");
   strcpy(pm->fn[COV_LQ],"");
   pm->dwn[SOURCE]=0; pm->dwr[SOURCE]=0.0;
   pm->dwn[TARGET]=0; pm->dwr[TARGET]=0.0;
   while((opt=getopt(argc,argv,"j:U:T:t:X:Y:C:D:z:u:r:w:l:b:k:g:d:e:c:n:N:G:J:K:o:x:y:f:s:hipqvaAW"))!=-1){
     switch(opt){
-      case 'D': scan_dwpm(pm->dwn,pm->dwr,&(pm->vep),optarg); break;
+      case 'D': num=scan_dwpm(pm->dwn,pm->dwr,&(pm->vep),&(pm->vlm),optarg); break;
       case 'G': scan_kernel(pm, optarg);              break;
       case 'j': pm->eta  = atof(optarg);              break;
       case 't': pm->fpv  = atof(optarg);              break;
@@ -208,7 +191,7 @@ void pw_getopt(pwpm *pm, int argc, char **argv){ int opt;
       case 'g': pm->gma  = atof(optarg);              break;
       case 'd': pm->dlt  = atof(optarg);              break;
       case 'e': pm->lim  = atof(optarg);              break;
-      case 'f': pm->btn  = atof(optarg);              break;
+      case 'f': pm->btn  = atof(optarg); flag=1;      break;
       case 'c': pm->cnv  = atof(optarg);              break;
       case 'n': pm->nlp  = atoi(optarg);              break;
       case 'N': pm->llp  = atoi(optarg);              break;
@@ -255,6 +238,14 @@ void pw_getopt(pwpm *pm, int argc, char **argv){ int opt;
         break;
     }
   }
+
+  /* check vgis arguments */
+  if(num>=4){int lx,ly;
+    lx=strlen(pm->fn[FUNC_X]);
+    ly=strlen(pm->fn[FUNC_Y]);
+    if(lx==0||ly==0) goto err01;
+  }
+  /* disable scale 's' and sim transform 'sRy+t' if affine */
   if(pm->opt&PW_OPT_AFFIN) pm->opt |=PW_OPT_NOSIM|PW_OPT_NOSCL;
   /* disable 'for each' normalization if rigid */
   if((pm->opt&PW_OPT_NONRG)&&(pm->opt&PW_OPT_NOSCL)) if(pm->nrm=='e') pm->nrm='y';
@@ -270,8 +261,12 @@ void pw_getopt(pwpm *pm, int argc, char **argv){ int opt;
   pm->omg=pm->omg==0?1e-250:pm->omg;
   /* llp is always less than or equal to nlp */
   if(pm->llp>pm->nlp) pm->llp=pm->nlp;
+  /* change default kdtree switch if function */
+  if(strlen(pm->fn[FUNC_Y])&&flag==0) pm->btn=0.35;
 
   return;
+
+  err01: printf("\n  ERROR: VGIS requires funtion values. Abort \n\n"); exit(EXIT_FAILURE);
 }
 
 void memsize(int *dsz, int *isz, pwsz sz, pwpm pm){
@@ -479,14 +474,14 @@ int main(int argc, char **argv){
   if((nx||ny)&&!(pm.opt&PW_OPT_QUIET)) fprintf(stderr,"  Downsampling ...");
   if(nx){X0=X;N0=N;N=sz.N=nx;Ux=calloc(rx==0?N0:N,si);}
   if(ny){Y0=Y;M0=M;M=sz.M=ny;Uy=calloc(ry==0?M0:M,si);}
-  if(nx){if(pm.vep<0) downsample(Ux,N,X0,D,N0,rx); else vgisample(Ux,N,X0,D,fx,Df,N0,rx,pm.vep);}
-  if(ny){if(pm.vep<0) downsample(Uy,M,Y0,D,M0,ry); else vgisample(Uy,M,Y0,D,fy,Df,M0,ry,pm.vep);}
+  if(nx){if(pm.vep<0) downsample(Ux,N,X0,D,N0,rx); else vgisample(Ux,N,X0,D,fx,Df,N0,rx,pm.vep,pm.vlm);}
+  if(ny){if(pm.vep<0) downsample(Uy,M,Y0,D,M0,ry); else vgisample(Uy,M,Y0,D,fy,Df,M0,ry,pm.vep,pm.vlm);}
   if(nx){X=getcols(X0,D,N0,Ux,N);if(fx){fx0=fx;fx=getcols(fx0,Df,N0,Ux,N);}}
   if(ny){Y=getcols(Y0,D,M0,Uy,M);if(fy){fy0=fy;fy=getcols(fy0,Df,M0,Uy,M);}}
   if(ny&&LQ){LQ0=LQ;LQ=LQ_getrows(LQ0,M0,K,Uy,M,ssm?D:0);}
   if((nx||ny)&&!(pm.opt&PW_OPT_QUIET)) fprintf(stderr," done. \n\n");
-  if(pm.vep>=0) save_variable(pm.fn[OUTPUT],"vgis-x.txt",X,D,N,"%.6lf",TRANSPOSE);
-  if(pm.vep>=0) save_variable(pm.fn[OUTPUT],"vgis-y.txt",Y,D,M,"%.6lf",TRANSPOSE);
+  if(nx) save_variable(pm.fn[OUTPUT],"downsampled-x.txt",X,D,N,"%.6lf",TRANSPOSE);
+  if(ny) save_variable(pm.fn[OUTPUT],"downsampled-y.txt",Y,D,M,"%.6lf",TRANSPOSE);
   gettimeofday(tv+3,NULL); tt[3]=clock();
 
   /* allocaltion */

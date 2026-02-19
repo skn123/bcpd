@@ -51,8 +51,8 @@ static void print_status(int lp, double Np, double sigma, double *pi, double dif
   if(opt&PW_OPT_QUIET) return;
   if(opt&PW_OPT_HISTO){
     if(pi){
-      if(lp) fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  pi=%lf  sigma=%lf  diff=%lf\n",lp+1,acc,Np,*pi,sigma,diff);
-      else   fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  pi=%lf  sigma=%lf          \n",lp+1,acc,Np,*pi,sigma);
+      if(lp) fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  ave(pi)=%lf  sigma=%lf  diff=%lf\n",lp+1,acc,Np,*pi,sigma,diff);
+      else   fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  ave(pi)=%lf  sigma=%lf          \n",lp+1,acc,Np,*pi,sigma);
     }
     else {
       if(lp) fprintf(stderr,"  loop=%.3d  acc.P=[%s]  N_hat=%lf  sigma=%lf  diff=%lf\n",lp+1,acc,Np,sigma,diff);
@@ -171,7 +171,7 @@ int bcpd(
   ){
 
   double cc,val,val1,val2,c1,c2; double vol,diff,rold=1e100,reg=1e-20,dlt,lim; int flg,local; int mtd;
-  double *pout,*c/*N*/,*mx,*vx/*D*/,*mf,*vf,*hf/*Df*/,*B/*KD*/,*E/*MD*/,*Q/*MK*/,*L/*K*/,*G/*MM*/,*G1/*MM*/,*G2/*MM*/;
+  double *pout,*c/*N*/,*mf,*vf,*hf/*Df*/,*B/*KD*/,*E/*MD*/,*Q/*MK*/,*L/*K*/,*G/*MM*/,*G1/*MM*/,*G2/*MM*/;
   double *b/*M*/,*q/*N*/,*f/*N*/,*PX/*DM*/,*sx/*D*M*nlp*/,*sy/*D*M*nlp*/,*ix/*DM*/,*lw/*DD*/;
   double *xb/*D*/,*ub/*D*/,*phi/*DD*/,*psi/*DD*/,*Sxu/*DD*/,*dS/*D*/,*wk/*10D*/; struct timeval tick;
   double *wld,*wdd/*K(K+11)*/,*wgd/*M+N+J+JJ*/; int *Tx,*Ty/*1+3N*/,*wdi/*M*/,*wgi/*M+N*/,*id/*M+N*/; double bet;
@@ -199,8 +199,8 @@ int bcpd(
   q=wd+sd; sd+=N; E =wd+sd; sd+=D*M; ix =wd+sd; sd+=D*M; wk=wd+sd; sd+=lwork1;
   ipiv=wi+si; si+=D; Pfx=Df?wd+sd:NULL; sd+=Df?Df*M:0; pout=wd+sd; sd+=N;
   /* common: function registration */
-  mx=wd+sd; sd+=D; mf=Df?wd+sd:NULL; sd+=Df; hf=Df?wd+sd:NULL; sd+=Df;
-  vx=wd+sd; sd+=D; vf=Df?wd+sd:NULL; sd+=Df;
+  mf=Df?wd+sd:NULL; sd+=Df; hf=Df?wd+sd:NULL; sd+=Df;
+  vf=Df?wd+sd:NULL; sd+=Df;
   if(pm.opt&PW_OPT_NONRG){G=G1=G2=NULL; goto skip_G_alloc;}
   /* rank restriction: double-> K x (2M+3K+D+12), int->M */
   /*------------------------*/ G  =K?NULL:wd+sd; sd+=K?0:M*M;
@@ -263,13 +263,14 @@ int bcpd(
     for(d=0;d<Df;d++) e[d]=sqrt(val/Df);
   }
   /* pout: adaptive outlier probability */
-  if(Df>10){ /* gaussian */
-    mvmean(mx,X,D,N); mvmean(mf,fx,Df,N);
-    mvsdev(vx,X,D,N); mvsdev(vf,fx,Df,N);
-    for(n=0;n<N;n++) pout[n]=exp(lnnormd(X+D*n,mx,vx,D)+zeta*lnnormd(fx+Df*n,mf,vf,Df));
-  } else   { /* uniform  */
-    vol=exp(lnvolume(X,D,N)+(Df?zeta*lnvolume(fx,Df,N):0));
-    for(n=0;n<N;n++) pout[n]=1/vol;
+  vol=exp(lnvolume(X,D,N)); for(n=0;n<N;n++){pout[n]=1.0/vol;}
+  if(Df>0&&Df<=10){ /* uniform  */
+    vol=exp(zeta*lnvolume(fx,Df,N));
+    for(n=0;n<N;n++) pout[n]*=1.0/vol;
+  } else if(Df){    /* gaussian */
+    mvmean(mf,fx,Df,N);
+    mvsdev(vf,fx,Df,N);
+    for(n=0;n<N;n++) pout[n]*=exp(zeta*lnnormd(fx+Df*n,mf,vf,Df));
   }
   /* tree */
   if(T) kdtree(Tx,wgi,wgd,X,D,N);

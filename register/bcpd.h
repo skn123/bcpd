@@ -24,7 +24,7 @@ typedef struct pairwise_size  {int D; int Df; int M; int N; int K; int J;} pwsz;
 typedef struct pairwise_param {char fn[8][256]; char nrm; char nrf; int opt;
   int nlp; int G; double dlt; double omg; double gma; double fpv;
   int llp; int J; double lim; double lmd; double bet; double eta;
-  int rns; int K; double btn; double kpa; double cnv; double vep;
+  int rns; int K; double btn; double kpa; double cnv; double vep; double vlm;
   int dwn[2]; double dwr[2]; int nnk; double nnr; double tau; double eps;
 } pwpm;
 

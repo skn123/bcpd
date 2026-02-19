@@ -14,7 +14,7 @@ fx=sprintf('%s/fy2.txt',DIRDATA);
 fy=sprintf('%s/fy2.skull.txt',DIRDATA);
 
 IN =sprintf('-x%s -X%s -y%s -Y%s',vx,fx,vy,fy);
-OPT=sprintf('-ux -Tr -w0.9 -j.3 -A -h -g1 -n500 -sY -c1e-7 -r1');
+OPT=sprintf('-ux -Tr -w0.9 -j.3 -h -g1 -n500 -sY -c1e-7 -r1');
 
 cmd=sprintf('%s %s %s',EXE,IN,OPT);
 system(cmd); clear;
