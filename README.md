@@ -1,15 +1,20 @@
 
 # Bayesian Coherent Point Drift / Domain Elastic Transform
 
+## NEWS
+- Mar 22 2026 We uploaded our paper proposing Domain Elastic Transform to [arXiv](https://arxiv.org/html/2603.21235v1).
+- Mar 18 2025 We initiated distributing Domain Elastic Transform Code [initial commit](https://github.com/ohirose/bcpd/tree/616b4c5e4e28ac598bcf770a9b231d55a97c2e71)
+
 This repository provides a software suite implementing Domain Elastic Transform (DET),
 Bayesian Coherent Point Drift (BCPD/GBCPD), and Dependent Landmark Drift (DLD),
 BCPD registers two point clouds, which can be applied to shape analysis, 3D model
 reconstruction, and so forth. DET registers two functions, which can be applied
-to aligning digital images and audio signals. DLD is a method for active shape model fitting.
+to aligning spatial transcriptomics data, digital images, and audio signals. DLD is a method for active shape model fitting.
 All methods can be accelerated using downsampling and displacement field interpolation,
 indicated by '++' after the method’s name, as in BCPD++.
 
 For more information, see
+[Hirose2026](https://arxiv.org/html/2603.21235v1) (DET),
 [Hirose2022](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9918058) (GBCPD/GBCPD++),
 [Hirose2020a](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8985307) (BCPD), and
 [Hirose2020b](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9290402) (BCPD++).
@@ -55,6 +60,8 @@ If you have any questions, kindly email ohirose.univ+bcpd(at)gmail.com with your
 ## References
 
 The details of the algorithms are available in the following papers:
+- [DET] O. Hirose and E. Rodolà,
+  "[Domain Elastic Transform: Bayesian Function Registration for High-Dimensional Scientific Data](https://arxiv.org/html/2603.21235v1)," Mar 2026.
 - [GBCPD/GBCPD++] O. Hirose,
   "[Geodesic-Based Bayesian Coherent Point Drift](https://ieeexplore.ieee.org/document/9918058),"
   [IEEE TPAMI](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=34), Oct 2022.
