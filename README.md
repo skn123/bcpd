@@ -12,50 +12,111 @@ reconstruction, and so forth. DET registers two functions, which can be applied
 to aligning spatial transcriptomics data, digital images, and audio signals. DLD is a method for active shape model fitting.
 All methods can be accelerated using downsampling and displacement field interpolation,
 indicated by '++' after the method’s name, as in BCPD++.
+Below is a demonstration of DET, applied to a spatial transcriptomics dataset:
+
+![FIG:DET-MOSTA](https://github.com/ohirose/bcpd/blob/master/img/fig-det-mosta.png?raw=true)
 
 For more information, see
 [Hirose2026](https://arxiv.org/html/2603.21235v1) (DET),
 [Hirose2022](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9918058) (GBCPD/GBCPD++),
 [Hirose2020a](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8985307) (BCPD), and
 [Hirose2020b](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9290402) (BCPD++).
+[Hirose2017](https://arxiv.org/abs/1711.06588) (DLD).
 Also, several examples can be watched in
 [[Video 1]](https://youtu.be/OT97b60iBmQ),
 [[Video 2]](https://youtu.be/pbLVMDj1Zro),
 [[Video 3]](https://youtu.be/cET6gKAvjw0),
 [[Video 4]](https://youtu.be/SoUTbH2tJj8).
+[[Video 5]](https://www.youtube.com/watch?v=3sDNes4n_RY).
 If you have any questions, kindly email ohirose.univ+bcpd(at)gmail.com with your name and affiliation.
-
-![alt text](https://github.com/ohirose/bcpd/blob/master/img/transfer.jpg?raw=true)
 
 ## Table of Contents
 
-1. [References](#references)
-2. [Performance](#performance)
+1. [Algorithm Overviews](#algorithm-overviews)
+2. [References](#references)
+3. [Performance](#performance)
     + [GBCPD vs CPD](#gbcpd-vs-cpd)
     + [BCPD vs CPD](#bcpd-vs-cpd)
     + [BCPD vs BCPD++](#bcpd-vs-bcpd)
-3. [Demo](#demo)
+4. [Demo](#demo)
     + [Dataset preparation](#dataset-preparation)
     + [Demo script execution](#demo-script-execution)
-4. [Compilation](#compilation)
+5. [Compilation](#compilation)
     + [Windows](#windows)
     + [MacOS and Linux](#macos-and-linux)
-5. [Usage](#usage)
+6. [Usage](#usage)
     + [Terms and symbols](#terms-and-symbols)
     + [Algorithms](#algorithms)
     + [Input data](#input-data)
     + [Tuning parameters](#tuning-parameters)
     + [Kernel functions](#kernel-functions)
-6. [Acceleration](#acceleration)
+7. [Acceleration](#acceleration)
     + [Nystrom method](#nystrom-method)
     + [KD tree search](#kd-tree-search)
     + [Downsampling](#downsampling)
     + [Interpolation](#interpolation)
-6. [Options](#options)
+8. [Options](#options)
     + [Convergence](#convergence)
     + [Normalization](#normalization)
     + [File output](#file-output)
     + [Terminal output](#terminal-output)
+
+
+## Algorithm Overviews
+
+### Domain Elastic Transform (DET)
+[[Paper]](https://arxiv.org/html/2603.21235v1)
+DET is a grid-free probabilistic framework that unifies geometric and functional alignment. By treating data as functions
+on irregular domains, it registers high-dimensional signals directly without requiring lossy voxelization or binning.
+The algorithm formulates the registration problem within a rigorous Bayesian framework, modeling domain deformation as
+an elastic motion guided by a joint spatial-functional likelihood. This makes it highly effective for emerging
+scientific data, such as spatial transcriptomics, where high-dimensional vector-valued functions are defined on sparse
+point sets.
+
+![FIG:DET](https://github.com/ohirose/bcpd/blob/master/img/fig-det-gmdl.png?raw=true)
+
+### Bayesian Coherent Point Drift (BCPD)
+[[Paper]](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=34)
+BCPD represents a probabilistic generalization of the Coherent Point Drift algorithm, designed to align geometric
+structures by treating data as sparse point clouds. It utilizes a motion coherence prior to facilitate smooth, non-rigid
+domain deformation. BCPD also incorporates a robust acceleration scheme that scales the algorithm to handle millions
+of points efficiently on standard hardware.
+
+### Geodesic-Based Bayesian Coherent Point Drift (GBCPD)
+[[Paper]](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=34)
+GBCPD enhances the standard BCPD framework by employing a surface coherence matrix that combines a Gaussian kernel
+with a geodesic exponential kernel. This specific formulation allows for more flexible domain deformations. Crucially,
+it helps topologically separate closely located boundaries, ensuring stable deformation even across complex topological
+cuts or distinct structural interfaces.
+
+![FIG:GBCPD](https://github.com/ohirose/bcpd/blob/master/img/fig-gbcpd.png?raw=true)
+
+### Dependent Landmark Drift (DLD)
+[[Paper]](https://arxiv.org/abs/1711.06588)
+DLD is a robust point set registration algorithm designed specifically for active shape model fitting. Instead of
+relying on a standard motion coherence prior to guide alignment, DLD utilizes a statistical shape model to constrain
+its deformations. This allows the algorithm to reliably map a learned mean shape to a target point cloud, making it
+highly resilient to noise, artifacts, and structural variations by anchoring the transformation to prior shape
+knowledge.
+
+### Accelerated Variants (The "++" Framework)
+[[Paper]](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9290402)
+To handle massive datasets—scaling up to millions of points on standard hardware—all of the core algorithms can be
+run in a highly optimized accelerated mode, denoted by the "++" suffix (e.g., DET++, BCPD++, G-BCPD++, DLD++). This
+framework drastically reduces computational and memory bottlenecks by employing a combination of mathematical
+approximations and spatial search techniques:
+
+* **Downsampling & Interpolation:** To further improve scalability, the registration workflow is divided into a
+streamlined three-step process. First, the input functions or point clouds are downsampled to a smaller set of
+representative landmarks. Second, the core registration algorithm is applied to this reduced set. Finally, the
+resulting domain displacement vectors are interpolated back to the original, full-resolution data.
+
+* **Low-Rank Approximation & Fast Search:** The acceleration pipeline utilizes the Nyström method for low-rank
+matrix approximation during the early optimization stages. As the alignment refines and the matching probability
+matrix becomes sparser, the system transitions to a k-d tree search to efficiently evaluate and prune
+low-probability point correspondences.
+
+![FIG:BCPD++](https://github.com/ohirose/bcpd/blob/master/img/lucy.png?raw=true)
 
 ## References
 
@@ -260,7 +321,7 @@ The following parameters tune the geodesic kernel:
 - `-z [real]`: Epsilon. Positive. Acceptable condition number of G.
 
 ## Acceleration
-![alt text](https://github.com/ohirose/bcpd/blob/master/img/lucy.png?raw=true)
+![FIG:BCPD++:DEMO](https://github.com/ohirose/bcpd/blob/master/img/transfer.jpg?raw=true)
 
 BCPD/DLD/DET can be accelerated inside and outside variational Bayes inference (VB), separately. The Nystrom method and
 KD-tree search accelerate VBI. The former works before approaching convergence, whereas the latter works near
