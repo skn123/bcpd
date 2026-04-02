@@ -17,10 +17,10 @@ Below is a demonstration of DET, applied to a spatial transcriptomics dataset:
 ![FIG:DET-MOSTA](https://github.com/ohirose/bcpd/blob/master/img/fig-det-mosta.png?raw=true)
 
 For more information, see
-[Hirose2026](https://arxiv.org/html/2603.21235v1) (DET),
-[Hirose2022](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9918058) (GBCPD/GBCPD++),
-[Hirose2020a](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8985307) (BCPD), and
-[Hirose2020b](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9290402) (BCPD++).
+[Hirose2026](https://arxiv.org/pdf/2603.21235) (DET),
+[Hirose2022](https://www.computer.org/csdl/journal/tp/2023/05/09918058/1HrevA5D8qY) (GBCPD/GBCPD++),
+[Hirose2020a](https://www.computer.org/csdl/journal/tp/2021/07/08985307/1hcyC0ghzz2) (BCPD), and
+[Hirose2020b](https://www.computer.org/csdl/journal/tp/2021/08/09290402/1prKIrOP53a) (BCPD++).
 [Hirose2017](https://arxiv.org/abs/1711.06588) (DLD).
 Also, several examples can be watched in
 [[Video 1]](https://youtu.be/OT97b60iBmQ),
@@ -65,7 +65,7 @@ If you have any questions, kindly email ohirose.univ+bcpd(at)gmail.com with your
 ## Algorithm Overviews
 
 ### Domain Elastic Transform (DET)
-[[Paper]](https://arxiv.org/html/2603.21235v1)
+[[Paper]](https://arxiv.org/pdf/2603.21235)
 DET is a grid-free probabilistic framework that unifies geometric and functional alignment. By treating data as functions
 on irregular domains, it registers high-dimensional signals directly without requiring lossy voxelization or binning.
 The algorithm formulates the registration problem within a rigorous Bayesian framework, modeling domain deformation as
@@ -76,14 +76,14 @@ point sets.
 ![FIG:DET](https://github.com/ohirose/bcpd/blob/master/img/fig-det-gmdl.png?raw=true)
 
 ### Bayesian Coherent Point Drift (BCPD)
-[[Paper]](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=34)
+[[Paper]](https://www.computer.org/csdl/journal/tp/2021/07/08985307/1hcyC0ghzz2)
 BCPD represents a probabilistic generalization of the Coherent Point Drift algorithm, designed to align geometric
 structures by treating data as sparse point clouds. It utilizes a motion coherence prior to facilitate smooth, non-rigid
 domain deformation. BCPD also incorporates a robust acceleration scheme that scales the algorithm to handle millions
 of points efficiently on standard hardware.
 
 ### Geodesic-Based Bayesian Coherent Point Drift (GBCPD)
-[[Paper]](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=34)
+[[Paper]](https://www.computer.org/csdl/journal/tp/2023/05/09918058/1HrevA5D8qY)
 GBCPD enhances the standard BCPD framework by employing a surface coherence matrix that combines a Gaussian kernel
 with a geodesic exponential kernel. This specific formulation allows for more flexible domain deformations. Crucially,
 it helps topologically separate closely located boundaries, ensuring stable deformation even across complex topological
@@ -92,7 +92,7 @@ cuts or distinct structural interfaces.
 ![FIG:GBCPD](https://github.com/ohirose/bcpd/blob/master/img/fig-gbcpd.png?raw=true)
 
 ### Dependent Landmark Drift (DLD)
-[[Paper]](https://arxiv.org/abs/1711.06588)
+[[Paper]](https://arxiv.org/pdf/1711.06588)
 DLD is a robust point set registration algorithm designed specifically for active shape model fitting. Instead of
 relying on a standard motion coherence prior to guide alignment, DLD utilizes a statistical shape model to constrain
 its deformations. This allows the algorithm to reliably map a learned mean shape to a target point cloud, making it
@@ -100,7 +100,7 @@ highly resilient to noise, artifacts, and structural variations by anchoring the
 knowledge.
 
 ### Accelerated Variants (The "++" Framework)
-[[Paper]](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9290402)
+[[Paper]](https://www.computer.org/csdl/journal/tp/2021/08/09290402/1prKIrOP53a)
 To handle massive datasets—scaling up to millions of points on standard hardware—all of the core algorithms can be
 run in a highly optimized accelerated mode, denoted by the "++" suffix (e.g., DET++, BCPD++, G-BCPD++, DLD++). This
 framework drastically reduces computational and memory bottlenecks by employing a combination of mathematical
@@ -122,15 +122,15 @@ low-probability point correspondences.
 
 The details of the algorithms are available in the following papers:
 - [DET] O. Hirose and E. Rodolà,
-  "[Domain Elastic Transform: Bayesian Function Registration for High-Dimensional Scientific Data](https://arxiv.org/html/2603.21235v1)," Mar 2026.
+  "[Domain Elastic Transform: Bayesian Function Registration for High-Dimensional Scientific Data](https://arxiv.org/pdf/2603.21235)," Mar 2026.
 - [GBCPD/GBCPD++] O. Hirose,
-  "[Geodesic-Based Bayesian Coherent Point Drift](https://ieeexplore.ieee.org/document/9918058),"
+  "[Geodesic-Based Bayesian Coherent Point Drift](https://www.computer.org/csdl/journal/tp/2023/05/09918058/1HrevA5D8qY),"
   [IEEE TPAMI](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=34), Oct 2022.
 - [BCPD++] O. Hirose,
-  "[Acceleration of non-rigid point set registration with downsampling and Gaussian process regression](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9290402),"
+  "[Acceleration of non-rigid point set registration with downsampling and Gaussian process regression](https://www.computer.org/csdl/journal/tp/2021/08/09290402/1prKIrOP53a),"
   [IEEE TPAMI](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=34), Dec 2020.
 - [BCPD] O. Hirose,
-  "[A Bayesian formulation of coherent point drift](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8985307),"
+  "[A Bayesian formulation of coherent point drift](https://www.computer.org/csdl/journal/tp/2021/07/08985307/1hcyC0ghzz2),"
   [IEEE TPAMI](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=34), Feb 2020.
   - The article's [supplementary document](https://www.dropbox.com/s/pkgw2xxd0f3anfk/bcpd-appendix.pdf?dl=1)
     contains proofs of propositions.
