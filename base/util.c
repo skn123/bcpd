@@ -106,7 +106,7 @@ static size_t wordcount(FILE *fp, int linecapa){
   fseek(fp,0,SEEK_SET);
   fgets(line,linecapa,fp); len=strlen(line);
   fseek(fp,0,SEEK_SET);
-  while(fscanf(fp,"%lf",&num)){if(ftell(fp)>=len){break;}ct++;}
+  while(fscanf(fp,"%lf",&num)==1){if(ftell(fp)>=len){break;}ct++;fscanf(fp,"%*[, \t\r]");}
   free(line);
   return ct;
 }
@@ -128,11 +128,9 @@ double *read2dcm(int *nr, int *nc, const char *filename){
   r=linecount(fp,capa); n=r*c;
   a=(double*) malloc(n*sd);
 
-  switch(c){
-    case 2:  for(i=0;i<r;i++) fscanf(fp,"%lf%lf",   a+c*i,a+c*i+1);          break;
-    case 3:  for(i=0;i<r;i++) fscanf(fp,"%lf%lf%lf",a+c*i,a+c*i+1,a+c*i+2);  break;
-    default: for(i=0;i<n;i++) fscanf(fp,"%lf",a+i);
-  } *nr=r; *nc=c; fclose(fp);
+  /* Separator-tolerant read: accepts comma-, space-, and tab-delimited files. */
+  for(i=0;i<n;i++){fscanf(fp,"%*[, \t\r\n]");fscanf(fp,"%lf",a+i);}
+  *nr=r; *nc=c; fclose(fp);
 
   return a;
   err01: fprintf(stderr,"\n\n  File '%s': Not Found.\n\n",filename); exit(EXIT_FAILURE);
